@@ -17,10 +17,9 @@ build/
 .DS_Store
 Thumbs.db
 
-# Manus SDK build artifacts
+# Manus SDK build artifacts (*.so is tracked via Git LFS)
 operator/hand/sdk/SDKClient_Linux/SDKClient_Linux.out
 operator/hand/sdk/SDKClient_Linux/*.o
-operator/hand/sdk/SDKClient_Linux/ManusSDK/lib/*.so
 
 # Conda
 *.conda
