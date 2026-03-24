@@ -1,0 +1,20 @@
+# test_freedrive.script
+# Minimal URScript to verify script upload and execution.
+# Puts robot in freedrive mode for 10 seconds.
+# Expected: robot becomes compliant (can be pushed by hand).
+
+def test_freedrive():
+  textmsg("TestFreedrive: Starting")
+  freedrive_mode()
+
+  local i = 0
+  while i < 5000:
+    sync()
+    i = i + 1
+  end
+
+  end_freedrive_mode()
+  textmsg("TestFreedrive: Done (10s elapsed)")
+end
+
+test_freedrive()

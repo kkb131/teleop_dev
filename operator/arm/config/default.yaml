@@ -1,0 +1,21 @@
+network:
+  target_ip: "192.168.0.10"       # 로봇 PC IP
+  port: 9871                       # UDP port
+  hz: 50                           # 전송 주파수 (Hz)
+
+# 트래커 목록 — 추후 다중 트래커 확장 가능
+# serial: null이면 첫 번째 발견된 트래커 자동 선택
+# role: teleop, head, left_hand, right_hand 등 (현재는 teleop만 사용)
+trackers:
+  - name: "right_hand"
+    serial: null
+    role: "teleop"
+
+calibration:
+  file: null                       # 캘리브레이션 JSON 경로 (null = 기본 축 매핑)
+  samples_per_point: 50            # 캘리브레이션 시 포인트당 샘플 수
+
+# Vive 트래커 매핑 모드
+# relative: 시작 시 로봇 현재 포즈에서 출발, 트래커 delta만 적용 (권장)
+# absolute: 캘리브레이션된 트래커 좌표가 곧 로봇 목표 좌표 (1:1 매핑)
+mapping_mode: "relative"

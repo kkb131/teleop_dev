@@ -1,0 +1,51 @@
+robot:
+  ip: "192.168.0.2"
+  mode: "sim"
+
+control:
+  frequency_sim: 50
+  frequency_rtde: 125
+
+input:
+  type: "keyboard"
+  cartesian_step: 0.01
+  rotation_step: 0.05
+  xbox_linear_scale: 0.03
+  xbox_angular_scale: 0.08
+  network_port: 9870
+  network_linear_scale: 0.005
+  network_angular_scale: 0.015
+  # Vive Tracker input (use with vive_sender.py)
+  vive_port: 9871
+  vive_linear_scale: 1.0
+  vive_angular_scale: 1.0
+  vive_deadzone: 0.002
+  vive_calibration_file: null
+
+filter:
+  alpha_position: 0.85
+  alpha_orientation: 0.85
+
+ik:
+  position_cost: 1.0
+  orientation_cost: 0.5
+  posture_cost: 1.0e-2
+  damping: 1.0e-12
+  soft_sync_alpha: 0.05      # IK drift correction blend rate (0~1, higher = faster correction)
+  impedance_lookahead: 0.15  # seconds — IK solve virtual dt for spring distance
+
+safety:
+  packet_timeout_ms: 2000      # keyboard is event-based; hold torque between keypresses
+  max_joint_vel: 1.0
+  max_position_deviation: 0.3  # rad — max deviation q_desired vs q_actual
+  max_ee_velocity: 0.2
+  workspace:
+    x: [-0.8, 0.8]
+    y: [-0.8, 0.8]
+    z: [0.05, 1.2]
+
+impedance:
+  default_preset: "SOFT"         # start safe
+  gain_scale_range: [0.25, 2.0]
+  enable_coriolis_comp: true
+  max_joint_error: [0.20, 0.20, 0.15, 0.30, 0.30, 0.55]  # rad — sized so STIFF reaches TORQUE_LIMITS

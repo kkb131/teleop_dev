@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Manus SDK build artifacts
+operator/hand/sdk/SDKClient_Linux/SDKClient_Linux.out
+operator/hand/sdk/SDKClient_Linux/*.o
+operator/hand/sdk/SDKClient_Linux/ManusSDK/lib/*.so
+
+# Conda
+*.conda
+*.tar.bz2
+
+# Docker build context artifacts
+.docker/

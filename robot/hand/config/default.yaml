@@ -1,0 +1,44 @@
+# Tesollo DG 5F M — Manus retargeting default config
+#
+# Usage:
+#   python3 -m tesollo.receiver --config tesollo/config/default.yaml
+
+network:
+  listen_port: 9872          # UDP port for Manus packets
+  listen_ip: "0.0.0.0"       # Bind address
+
+hand:
+  side: "right"              # "left" or "right"
+  ip: "169.254.186.72"       # DG5F Modbus TCP IP
+  port: 502                  # Modbus TCP port
+
+retarget:
+  # Per-joint scaling factors (20 values)
+  # Increase to amplify, decrease to dampen joint response
+  calibration_factors:
+    # Thumb        Index        Middle       Ring         Pinky
+    - 1.0          # Thumb spread
+    - 1.6          # Thumb MCP
+    - 1.3          # Thumb PIP
+    - 1.3          # Thumb DIP
+    - 1.0          # Index spread
+    - 1.0          # Index MCP
+    - 1.3          # Index PIP
+    - 1.7          # Index DIP
+    - 1.0          # Middle spread
+    - 1.0          # Middle MCP
+    - 1.3          # Middle PIP
+    - 1.7          # Middle DIP
+    - 1.0          # Ring spread
+    - 1.0          # Ring MCP
+    - 1.3          # Ring PIP
+    - 1.7          # Ring DIP
+    - 1.0          # Pinky spread
+    - 1.0          # Pinky MCP
+    - 1.0          # Pinky PIP
+    - 1.0          # Pinky DIP
+
+control:
+  hz: 60                     # Control loop rate
+  motion_time_ms: 50         # Per-joint motion time (ms)
+  enable_on_start: true      # Auto-start motors on launch

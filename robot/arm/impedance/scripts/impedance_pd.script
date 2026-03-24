@@ -1,0 +1,58 @@
+def torque_relay():
+  textmsg("TorqueRelay: Starting controller")
+  global cmd_tau = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+  global torque_active = False
+  global relay_running = True
+
+  thread torqueThread():
+    local zero_tau = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    while relay_running:
+      if torque_active:
+        direct_torque(cmd_tau)
+      else:
+        direct_torque(zero_tau)
+      end
+    end
+  end
+
+  local thrd = run torqueThread()
+  textmsg("TorqueRelay: torqueThread started")
+
+  local startup = 0
+  local count = 0
+  while True:
+    local mode = read_input_integer_register(19)
+
+    if startup < 500:
+      startup = startup + 1
+      mode = 0
+    end
+
+    if mode == -1:
+      textmsg("TorqueRelay: got stop signal")
+      break
+    end
+
+    if mode > 0:
+      cmd_tau = [read_input_float_register(18), read_input_float_register(19), read_input_float_register(20), read_input_float_register(21), read_input_float_register(22), read_input_integer_register(18) / 1000.0]
+      torque_active = True
+    else:
+      torque_active = False
+    end
+
+    count = count + 1
+    if count >= 500:
+      textmsg(str_cat("TorqueRelay: alive, mode=", to_str(mode)))
+      count = 0
+    end
+
+    sync()
+  end
+
+  relay_running = False
+  join thrd
+  textmsg("TorqueRelay: Stopping")
+  stopj(4.0)
+  textmsg("TorqueRelay: Controller stopped")
+end
+torque_relay()

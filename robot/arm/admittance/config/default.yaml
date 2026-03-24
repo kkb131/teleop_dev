@@ -1,0 +1,52 @@
+robot:
+  ip: "192.168.0.2"
+  mode: "sim"               # "sim" (ROS2 topics) or "rtde" (real robot)
+
+control:
+  frequency_sim: 50          # Hz (sim mode)
+  frequency_rtde: 125        # Hz (rtde mode, matches servoJ)
+
+input:
+  type: "keyboard"           # "keyboard", "xbox", or "network"
+  cartesian_step: 0.01       # m per key press (at 1x speed)
+  rotation_step: 0.05        # rad per key press (at 1x speed)
+  xbox_linear_scale: 0.03    # Xbox stick -> linear velocity scale
+  xbox_angular_scale: 0.08   # Xbox stick -> angular velocity scale
+  network_port: 9870         # UDP port for network joystick (use with joystick_sender.py)
+  network_linear_scale: 0.005   # Network joystick linear scale (lower than xbox, continuous input)
+  network_angular_scale: 0.015  # Network joystick angular scale
+  # Vive Tracker input (use with vive_sender.py)
+  vive_port: 9871               # UDP port for Vive tracker
+  vive_linear_scale: 1.0        # Tracker m/s → command m/s
+  vive_angular_scale: 1.0       # Tracker rad/s → command rad/s
+  vive_deadzone: 0.002          # Velocity deadzone (m/s & rad/s)
+  vive_calibration_file: null   # Calibration JSON (null = default axis mapping)
+
+filter:
+  alpha_position: 0.55       # soft teleop: smoother motion
+  alpha_orientation: 0.55    # soft teleop: smoother rotation
+
+ik:
+  position_cost: 1.0         # Pink FrameTask position cost
+  orientation_cost: 0.5      # Pink FrameTask orientation cost
+  posture_cost: 1.0e-3       # Pink PostureTask cost (joint centering)
+  damping: 1.0e-12           # QP solver damping
+  soft_sync_alpha: 0.01      # IK drift correction blend rate (reduced for better torque response)
+
+safety:
+  packet_timeout_ms: 200     # No input for this long -> speed stop
+  max_joint_vel: 0.5         # rad/s (teleop-specific, conservative)
+  max_ee_velocity: 0.1       # m/s
+  workspace:
+    x: [-0.8, 0.8]           # meters from base_link
+    y: [-0.8, 0.8]
+    z: [0.05, 1.2]
+
+admittance:
+  enabled_by_default: true         # Always ON (cycle preset with B button)
+  default_preset: "MEDIUM"         # STIFF / MEDIUM / SOFT / FREE
+  max_displacement_trans: 0.15     # meters (max admittance offset, increase for hand guiding)
+  max_displacement_rot: 0.30       # radians (~17 deg, increase for hand guiding)
+  force_deadzone: [3.0, 3.0, 3.0, 0.3, 0.3, 0.3]  # N / Nm
+  force_saturation: 100.0          # N (reset admittance if exceeded)
+  torque_saturation: 10.0          # Nm
