@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
-"""Manus UDP receiver → DG5F retarget → Modbus TCP control loop.
+"""Manus UDP receiver → DG5F retarget → ROS2 JointTrajectory control loop.
 
 Receives Manus glove data via UDP (from manus_sender on operator PC),
-retargets joint angles to DG5F motor commands, and sends via Modbus TCP.
+retargets joint angles to DG5F motor commands, and publishes via ROS2.
+
+Requires dg5f_driver running:
+    ros2 launch dg5f_driver dg5f_right_driver.launch.py delto_ip:=169.254.186.72
 
 Usage:
-    # Dry-run (no DG5F hardware — just receive + retarget + print):
-    python3 -m tesollo.receiver --dry-run
+    # Dry-run (no hardware — just receive + retarget + print):
+    python3 -m teleop_dev.robot.hand.receiver --dry-run
 
-    # Real DG5F hand:
-    python3 -m tesollo.receiver --hand-ip 169.254.186.72 --port 9872
+    # ROS2 mode (dg5f_driver must be running):
+    python3 -m teleop_dev.robot.hand.receiver --hand right
 
     # With config file:
-    python3 -m tesollo.receiver --config tesollo/config/default.yaml
+    python3 -m teleop_dev.robot.hand.receiver --config config/default.yaml
 """
 
 import argparse
@@ -140,14 +143,10 @@ def _print_status(data: HandData, dg5f_angles: np.ndarray, hz: float,
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Manus → DG5F retarget receiver"
+        description="Manus → DG5F retarget receiver (ROS2)"
     )
     parser.add_argument("--config", default=None,
                         help="YAML config file path")
-    parser.add_argument("--hand-ip", default=None,
-                        help="DG5F hand IP (overrides config)")
-    parser.add_argument("--hand-port", type=int, default=None,
-                        help="DG5F Modbus port (overrides config)")
     parser.add_argument("--port", type=int, default=None,
                         help="UDP listen port (overrides config)")
     parser.add_argument("--hand", default=None,
@@ -156,7 +155,7 @@ def main():
     parser.add_argument("--hz", type=int, default=None,
                         help="Control loop Hz (overrides config)")
     parser.add_argument("--dry-run", action="store_true",
-                        help="No DG5F connection — just receive + retarget + print")
+                        help="No ROS2 publishing — just receive + retarget + print")
     parser.add_argument("--motion-time", type=int, default=None,
                         help="Per-joint motion time in ms (overrides config)")
     args = parser.parse_args()
@@ -169,21 +168,17 @@ def main():
         cfg.network.listen_port = args.port
     if args.hand is not None:
         cfg.hand.side = args.hand
-    if args.hand_ip is not None:
-        cfg.hand.ip = args.hand_ip
-    if args.hand_port is not None:
-        cfg.hand.port = args.hand_port
     if args.hz is not None:
         cfg.control.hz = args.hz
     if args.motion_time is not None:
         cfg.control.motion_time_ms = args.motion_time
 
     print("=" * 70)
-    print("  Manus → DG5F Retarget Receiver")
-    print(f"  Mode: {'DRY RUN' if args.dry_run else 'LIVE'}")
+    print("  Manus → DG5F Retarget Receiver (ROS2)")
+    print(f"  Mode: {'DRY RUN' if args.dry_run else 'LIVE (ROS2)'}")
     print(f"  UDP: {cfg.network.listen_ip}:{cfg.network.listen_port}")
     if not args.dry_run:
-        print(f"  DG5F: {cfg.hand.ip}:{cfg.hand.port} ({cfg.hand.side} hand)")
+        print(f"  Hand: {cfg.hand.side}")
     print(f"  Rate: {cfg.control.hz} Hz | Motion time: {cfg.control.motion_time_ms} ms")
     print("  Controls: Ctrl+C = Quit")
     print("=" * 70)
@@ -194,25 +189,17 @@ def main():
         calibration_factors=cfg.retarget.calibration_factors,
     )
 
-    # Setup DG5F client (unless dry-run)
+    # Setup ROS2 client (unless dry-run)
     client = None
     if not args.dry_run:
-        from teleop_dev.robot.hand.dg5f_client import DG5FClient
-        client = DG5FClient(
-            ip=cfg.hand.ip,
-            port=cfg.hand.port,
+        import rclpy
+        rclpy.init()
+        from teleop_dev.robot.hand.dg5f_ros2_client import DG5FROS2Client
+        client = DG5FROS2Client(
             hand_side=cfg.hand.side,
+            motion_time_ms=cfg.control.motion_time_ms,
         )
-        try:
-            client.connect()
-            if cfg.control.enable_on_start:
-                client.start()
-            # Set motion times
-            client.set_motion_times([cfg.control.motion_time_ms] * 20)
-        except Exception as e:
-            print(f"\n[ERROR] DG5F connection failed: {e}")
-            print("        Use --dry-run to test without hardware")
-            sys.exit(1)
+        print(f"  [ROS2] DG5FROS2Client initialized ({cfg.hand.side} hand)")
 
     # Setup UDP receiver
     receiver = ManusReceiver(
@@ -244,6 +231,10 @@ def main():
         while not shutdown.is_set():
             t0 = time.perf_counter()
 
+            # Process ROS2 callbacks (joint_states feedback)
+            if client is not None:
+                rclpy.spin_once(client, timeout_sec=0)
+
             data = receiver.get_latest()
             if data is not None and data is not last_data:
                 last_data = data
@@ -251,12 +242,12 @@ def main():
                 # Retarget
                 dg5f_angles = retarget.retarget(data.joint_angles)
 
-                # Send to DG5F
+                # Publish to ROS2
                 if client is not None:
                     try:
                         client.set_positions(dg5f_angles)
                     except Exception as e:
-                        print(f"\r  [WARN] DG5F write error: {e}", end="", flush=True)
+                        print(f"\r  [WARN] ROS2 publish error: {e}", end="", flush=True)
 
                 # Display
                 hz_count += 1
@@ -283,8 +274,8 @@ def main():
     finally:
         receiver.stop()
         if client is not None:
-            client.stop()
-            client.disconnect()
+            client.destroy_node()
+            rclpy.shutdown()
 
     print(f"\n  Total frames: {frame}")
     print(f"  Total packets: {receiver.packet_count}")

@@ -1,7 +1,11 @@
-# Tesollo DG 5F M — Manus retargeting default config
+# Tesollo DG 5F M — Manus retargeting default config (ROS2 mode)
+#
+# Requires dg5f_driver running:
+#   ros2 launch dg5f_driver dg5f_right_driver.launch.py delto_ip:=169.254.186.72
 #
 # Usage:
-#   python3 -m tesollo.receiver --config tesollo/config/default.yaml
+#   python3 -m teleop_dev.robot.hand.receiver --hand right
+#   python3 -m teleop_dev.robot.hand.receiver --dry-run
 
 network:
   listen_port: 9872          # UDP port for Manus packets
@@ -9,8 +13,6 @@ network:
 
 hand:
   side: "right"              # "left" or "right"
-  ip: "169.254.186.72"       # DG5F Modbus TCP IP
-  port: 502                  # Modbus TCP port
 
 retarget:
   # Per-joint scaling factors (20 values)
@@ -40,5 +42,4 @@ retarget:
 
 control:
   hz: 60                     # Control loop rate
-  motion_time_ms: 50         # Per-joint motion time (ms)
-  enable_on_start: true      # Auto-start motors on launch
+  motion_time_ms: 50         # Per-joint trajectory duration (ms)
