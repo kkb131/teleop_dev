@@ -4,12 +4,7 @@ from pathlib import Path
 
 # Paths
 _TELEOP_DEV = Path(__file__).resolve().parent.parent  # teleop_dev/
-_TAMP_DEV = _TELEOP_DEV.parent / "tamp_dev"           # sibling tamp_dev/
-XRDF_PATH = str(
-    _TAMP_DEV
-    / "cumotion/isaac_ros_cumotion/isaac_ros_cumotion_robot_description/xrdf/ur10e.xrdf"
-)
-URDF_PATH = str(_TAMP_DEV / ".docker/assets/ur10e.urdf")
+URDF_PATH = str(_TELEOP_DEV / "ur10e.urdf")
 
 # Robot
 DEFAULT_ROBOT_IP = "192.168.0.2"
