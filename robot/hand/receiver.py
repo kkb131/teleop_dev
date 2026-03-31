@@ -222,6 +222,8 @@ def main():
     frame = 0
     loop_hz = 0.0
     hz_timer = time.time()
+    ema_alpha = 0.3  # EMA smoothing (0=no update, 1=no smoothing)
+    filtered_angles = None
     hz_count = 0
     last_data = None
 
@@ -239,8 +241,15 @@ def main():
             if data is not None and data is not last_data:
                 last_data = data
 
+                # EMA filter to reduce jitter
+                raw = data.joint_angles
+                if filtered_angles is None:
+                    filtered_angles = raw.copy()
+                else:
+                    filtered_angles = ema_alpha * raw + (1 - ema_alpha) * filtered_angles
+
                 # Retarget
-                dg5f_angles = retarget.retarget(data.joint_angles)
+                dg5f_angles = retarget.retarget(filtered_angles)
 
                 # Publish to ROS2
                 if client is not None:

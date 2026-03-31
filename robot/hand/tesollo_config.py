@@ -37,7 +37,7 @@ class RetargetConfig:
 @dataclass
 class ControlConfig:
     hz: int = 60
-    motion_time_ms: int = 50
+    motion_time_ms: int = 20
     enable_on_start: bool = True
 
 
