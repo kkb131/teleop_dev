@@ -115,16 +115,16 @@ RIGHT_DIRECTIONS = [
     # Thumb       Index        Middle       Ring         Pinky
      1, -1,  1,  1,
     -1,  1,  1,  1,
-     1,  1,  1,  1,   # Middle spread: was -1, fixed to 1
-     1,  1,  1,  1,   # Ring spread: was -1, fixed to 1
+    -1,  1,  1,  1,
+    -1,  1,  1,  1,
      1, -1,  1,  1,
 ]
 
 LEFT_DIRECTIONS = [
     -1,  1, -1, -1,
      1,  1,  1,  1,
-    -1,  1,  1,  1,   # Middle spread: was 1, fixed to -1 (mirror of right)
-    -1,  1,  1,  1,   # Ring spread: was 1, fixed to -1 (mirror of right)
+     1,  1,  1,  1,
+     1,  1,  1,  1,
     -1,  1,  1,  1,
 ]
 
@@ -235,11 +235,13 @@ class ManusToD5FRetarget:
                 mqd[2] = 0.0
             if mqd[3] < 0:
                 mqd[3] = 0.0
-            # Index spread must be <= 0 (Index direction=-1 already flips)
-            if mqd[4] > 0:
-                mqd[4] = 0.0
-            # Middle/Ring spread: allow both signs (direction fixed, no constraint needed)
-            # Pinky spread: let joint limits handle it
+            # Index/Middle/Ring spreads must be <= 0
+            for idx in [4, 8, 12]:
+                if mqd[idx] > 0:
+                    mqd[idx] = 0.0
+            # Pinky spread must be <= 0
+            if mqd[16] > 0:
+                mqd[16] = 0.0
         else:
             # Left hand: mirrored constraints
             if mqd[0] > 0:
@@ -248,8 +250,11 @@ class ManusToD5FRetarget:
                 mqd[2] = 0.0
             if mqd[3] > 0:
                 mqd[3] = 0.0
-            if mqd[4] < 0:
-                mqd[4] = 0.0
+            for idx in [4, 8, 12]:
+                if mqd[idx] < 0:
+                    mqd[idx] = 0.0
+            if mqd[16] < 0:
+                mqd[16] = 0.0
 
     def get_limits(self) -> list[JointLimits]:
         """Return joint limits for the configured hand side."""
