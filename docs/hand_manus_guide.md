@@ -16,7 +16,7 @@ Manus Quantum Metaglove로 손 동작을 캡처하여 Tesollo DG5F 로봇 핸드
 │ manus_sender.py  ────┼──────────────────→│ ManusToD5FRetarget           │
 │                      │                   │   ↓                          │
 │ [pynput 키보드]      │                   │ DG5FROS2Client (ROS2 topic)  │
-│                      │                   │   ↓ JointTrajectory          │
+│                      │                   │   ↓ MultiDOFCommand          │
 │                      │                   │ Tesollo DG5F Hand            │
 └──────────────────────┘                   └──────────────────────────────┘
 ```
@@ -210,20 +210,22 @@ pygame 기반 2D 스켈레톤 + 관절 각도 바 차트를 표시.
 
 ### 6.1 드라이버 시작 (Terminal 1)
 
+PID_ALL 컨트롤러 모드로 실행 (권장):
+
 ```bash
 source ~/ws/install/setup.bash
-ros2 launch dg5f_driver dg5f_right_driver.launch.py delto_ip:=169.254.186.72
+ros2 launch dg5f_driver dg5f_right_pid_all_controller.launch.py delto_ip:=169.254.186.72
 ```
 
 Left hand의 경우:
 ```bash
-ros2 launch dg5f_driver dg5f_left_driver.launch.py delto_ip:=169.254.186.73
+ros2 launch dg5f_driver dg5f_left_pid_all_controller.launch.py delto_ip:=169.254.186.73
 ```
 
 ### 6.2 드라이버 확인
 
 ```bash
-# 컨트롤러 상태
+# 컨트롤러 상태 (rj_dg_pospid가 active인지 확인)
 ros2 control list_controllers -c /dg5f_right/controller_manager
 
 # joint_states 확인
@@ -237,8 +239,27 @@ ros2 topic list | grep dg5f
 
 | 토픽 | 메시지 타입 | 용도 |
 |------|------------|------|
-| `/dg5f_right/dg5f_right_controller/joint_trajectory` | `trajectory_msgs/JointTrajectory` | 관절 명령 전송 |
+| `/dg5f_right/rj_dg_pospid/reference` | `control_msgs/MultiDOFCommand` | 관절 위치 명령 (PID) |
 | `/dg5f_right/joint_states` | `sensor_msgs/JointState` | 관절 피드백 (위치/속도/토크) |
+
+### 6.4 PID 튜닝
+
+설정 파일: `dg5f_driver/config/dg5f_right_pid_all_controller.yaml`
+
+| 파라미터 | 기본값 | 설명 |
+|----------|--------|------|
+| `p` | 1.5 | 비례 게인 (높이면 빠르지만 진동 위험) |
+| `i` | 0.0 | 적분 게인 (정상상태 오차 제거) |
+| `d` | 0.0 | 미분 게인 (진동 감쇠) |
+| `i_clamp_max/min` | 0.0 | 적분 windup 제한 |
+
+튜닝 테스트:
+```bash
+python3 -m robot.hand.tests.test_tuning --hand right
+python3 -m robot.hand.tests.test_tuning --hand right --test oscillation
+```
+
+> yaml 수정 후 드라이버 재시작 필요.
 
 ---
 
@@ -344,33 +365,41 @@ Left hand: `rj_` → `lj_`
 
 ## 10. DG5F 직접 제어 (Python API)
 
-### ROS2 API (권장)
+### ROS2 PID API (권장)
 
 ```python
 import rclpy
-from robot.hand.dg5f_ros2_client import DG5FROS2Client
+from rclpy.node import Node
+from control_msgs.msg import MultiDOFCommand
 
 rclpy.init()
-client = DG5FROS2Client(hand_side="right", motion_time_ms=500)
+node = Node("dg5f_test")
 
-client.set_positions([0.0] * 20)       # 손 펴기
-positions = client.get_positions()      # 현재 위치 (joint_states 기반)
+RIGHT_JOINTS = [
+    "rj_dg_1_1", "rj_dg_1_2", "rj_dg_1_3", "rj_dg_1_4",
+    "rj_dg_2_1", "rj_dg_2_2", "rj_dg_2_3", "rj_dg_2_4",
+    "rj_dg_3_1", "rj_dg_3_2", "rj_dg_3_3", "rj_dg_3_4",
+    "rj_dg_4_1", "rj_dg_4_2", "rj_dg_4_3", "rj_dg_4_4",
+    "rj_dg_5_1", "rj_dg_5_2", "rj_dg_5_3", "rj_dg_5_4",
+]
 
-client.destroy_node()
+pub = node.create_publisher(MultiDOFCommand, "/dg5f_right/rj_dg_pospid/reference", 10)
+
+msg = MultiDOFCommand()
+msg.dof_names = RIGHT_JOINTS
+msg.values = [0.0] * 20           # 손 펴기 (0도)
+pub.publish(msg)
+
+node.destroy_node()
 rclpy.shutdown()
 ```
 
-### 0도 이동 테스트
+### 튜닝 테스트
 
 ```bash
-# dg5f_driver 실행 중인 상태에서:
-python3 -m robot.hand.tests.test_zero_ros2 --hand right
-```
-
-### 직접 토픽 발행 테스트
-
-```bash
-python3 -m robot.hand.tests.test_direct_pub --hand right --target 0.0
+# dg5f_driver (pid_all) 실행 중인 상태에서:
+python3 -m robot.hand.tests.test_tuning --hand right
+python3 -m robot.hand.tests.test_tuning --hand right --test zero
 ```
 
 ---
@@ -396,7 +425,7 @@ python3 -m robot.hand.tests.test_direct_pub --hand right --target 0.0
 |------|---------|---------|
 | 1. SDK 빌드 | `cd sender/hand/sdk && ./build.sh` | - |
 | 2. 캘리브레이션 | `python3 -m sender.hand.calibrate --hand right` | - |
-| 3. 드라이버 시작 | - | `ros2 launch dg5f_driver dg5f_right_driver.launch.py delto_ip:=169.254.186.72` |
+| 3. 드라이버 시작 | - | `ros2 launch dg5f_driver dg5f_right_pid_all_controller.launch.py delto_ip:=169.254.186.72` |
 | 4. Receiver 시작 | - | `python3 -m robot.hand.receiver --hand right` |
 | 5. Sender 시작 | `python3 -m sender.hand.manus_sender --target-ip <로봇IP>` | (자동 수신) |
 | 6. 동작 확인 | 손을 움직여서 확인 | DG5F 핸드 동작 확인 |
@@ -446,7 +475,7 @@ sudo ufw allow 9872/udp
 ```bash
 ros2 control list_controllers -c /dg5f_right/controller_manager
 ```
-→ `dg5f_right_controller`가 `active` 상태인지 확인
+→ `rj_dg_pospid`가 `active` 상태인지 확인
 → joint_states에서 position 변화 확인:
 ```bash
 ros2 topic echo /dg5f_right/joint_states --once
