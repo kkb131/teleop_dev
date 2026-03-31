@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""DG5F JTC controller tuning test suite.
+"""DG5F PID controller tuning test suite.
 
 Tests zero-position accuracy, oscillation, step response, and joint mapping.
 Outputs per-joint diagnostics and tuning recommendations.
 
 Requires dg5f_driver running:
-    ros2 launch dg5f_driver dg5f_right_driver.launch.py delto_ip:=169.254.186.72
+    ros2 launch dg5f_driver dg5f_right_pid_all_controller.launch.py delto_ip:=169.254.186.72
 
 Usage:
     python3 -m teleop_dev.robot.hand.tests.test_tuning --hand right
@@ -18,14 +18,12 @@ Usage:
 import argparse
 import math
 import time
-from collections import defaultdict
 
 import numpy as np
 import rclpy
 from rclpy.node import Node
-from rclpy.duration import Duration
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
-from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+from control_msgs.msg import MultiDOFCommand
 from sensor_msgs.msg import JointState
 
 RIGHT_JOINTS = [
@@ -46,13 +44,15 @@ class TuningNode(Node):
         super().__init__("dg5f_tuning_test")
         self._hand = hand
         prefix = f"dg5f_{hand}"
+        side_prefix = "rj" if hand == "right" else "lj"
         self._joints = RIGHT_JOINTS if hand == "right" else LEFT_JOINTS
 
-        # Publisher
-        traj_topic = f"/{prefix}/{prefix}_controller/joint_trajectory"
+        # Publisher for PidController
+        pid_topic = f"/{prefix}/{side_prefix}_dg_pospid/reference"
         qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT,
                          durability=DurabilityPolicy.VOLATILE)
-        self._pub = self.create_publisher(JointTrajectory, traj_topic, qos)
+        self._pub = self.create_publisher(MultiDOFCommand, pid_topic, qos)
+        self.get_logger().info(f"Publishing to: {pid_topic}")
 
         # Subscriber
         js_topic = f"/{prefix}/joint_states"
@@ -66,18 +66,11 @@ class TuningNode(Node):
         if self._recording:
             self._js_history.append((time.monotonic(), list(msg.position)))
 
-    def send_positions(self, positions, duration_s=0.0):
-        msg = JointTrajectory()
-        msg.header.stamp = self.get_clock().now().to_msg()
-        msg.joint_names = self._joints
-        point = JointTrajectoryPoint()
-        point.positions = [float(p) for p in positions]
-        point.time_from_start = Duration(seconds=duration_s).to_msg()
-        msg.points = [point]
-        for _ in range(3):
-            msg.header.stamp = self.get_clock().now().to_msg()
-            self._pub.publish(msg)
-            time.sleep(0.05)
+    def send_positions(self, positions):
+        msg = MultiDOFCommand()
+        msg.dof_names = list(self._joints)
+        msg.values = [float(p) for p in positions]
+        self._pub.publish(msg)
 
     def spin_for(self, seconds: float):
         t0 = time.monotonic()
@@ -117,7 +110,7 @@ def test_zero_accuracy(node: TuningNode):
     print("  Test 1: Zero Position Accuracy")
     print("=" * 60)
 
-    node.send_positions([0.0] * 20, duration_s=2.0)
+    node.send_positions([0.0] * 20)
     print("  Sent 0-degree command, waiting 3s to settle...")
     node.spin_for(3.0)
 
@@ -164,12 +157,12 @@ def test_oscillation(node: TuningNode):
         target = [0.0] * 20
         for j in test_joints:
             target[j] = math.radians(80)
-        node.send_positions(target, duration_s=1.0)
+        node.send_positions(target)
         node.spin_for(1.5)
 
         # Step back to 0 and record
         node.start_recording()
-        node.send_positions([0.0] * 20, duration_s=0.0)
+        node.send_positions([0.0] * 20)
         node.spin_for(2.0)
         history = node.stop_recording()
 
@@ -209,7 +202,7 @@ def test_step_response(node: TuningNode):
     print("=" * 60)
 
     # Go to zero first
-    node.send_positions([0.0] * 20, duration_s=1.0)
+    node.send_positions([0.0] * 20)
     node.spin_for(2.0)
 
     target_rad = math.radians(80)
@@ -223,7 +216,7 @@ def test_step_response(node: TuningNode):
         target[j] = target_rad
 
         node.start_recording()
-        node.send_positions(target, duration_s=0.0)
+        node.send_positions(target)
         node.spin_for(2.0)
         history = node.stop_recording()
 
@@ -257,7 +250,7 @@ def test_step_response(node: TuningNode):
               f"90% settle={settle_time:.2f}s, overshoot={overshoot_pct:.1f}%{tag_str}")
 
         # Return to zero
-        node.send_positions([0.0] * 20, duration_s=0.5)
+        node.send_positions([0.0] * 20)
         node.spin_for(1.0)
 
     print("\n  >> If SLOW: Increase P or ff_velocity_scale")
@@ -274,24 +267,23 @@ def test_mapping(node: TuningNode):
     print("=" * 60)
 
     # Record baseline at zero
-    node.send_positions([0.0] * 20, duration_s=1.0)
+    node.send_positions([0.0] * 20)
     node.spin_for(2.0)
     baseline = node.get_positions()
 
-    target_rad_default = math.radians(15)   # reduced from 30° to avoid physical collision
-    target_rad_spread = math.radians(10)    # even smaller for spread joints (_1)
-    crosstalk_threshold = math.radians(3)   # adjusted for smaller angles
+    target_rad_default = math.radians(15)
+    target_rad_spread = math.radians(10)
+    crosstalk_threshold = math.radians(3)
     issues = []
 
     for i, name in enumerate(node._joints):
-        # Spread joints (_1) use smaller angle to avoid collision
         is_spread = (i % 4 == 0)
         target_rad = target_rad_spread if is_spread else target_rad_default
 
         # Command single joint
         target = [0.0] * 20
         target[i] = target_rad
-        node.send_positions(target, duration_s=0.5)
+        node.send_positions(target)
         node.spin_for(1.0)
 
         current = node.get_positions()
@@ -314,10 +306,10 @@ def test_mapping(node: TuningNode):
 
         for ct_name, ct_val in crosstalk:
             print(f"    crosstalk on {ct_name} = {ct_val:.3f} rad ({ct_val * DEG:.1f} deg)  [WARN]")
-            issues.append(f"{name} → {ct_name}: {ct_val * DEG:.1f} deg crosstalk")
+            issues.append(f"{name} -> {ct_name}: {ct_val * DEG:.1f} deg crosstalk")
 
         # Return to zero
-        node.send_positions([0.0] * 20, duration_s=0.3)
+        node.send_positions([0.0] * 20)
         node.spin_for(0.5)
 
     if issues:
@@ -333,7 +325,7 @@ def test_mapping(node: TuningNode):
 # ─────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description="DG5F JTC tuning test suite")
+    parser = argparse.ArgumentParser(description="DG5F PID tuning test suite")
     parser.add_argument("--hand", default="right", choices=["left", "right"])
     parser.add_argument("--test", default="all",
                         choices=["all", "zero", "oscillation", "step", "mapping"],
@@ -349,8 +341,9 @@ def main():
         return
 
     print("\n" + "=" * 60)
-    print(f"  DG5F JTC Tuning Test Suite ({args.hand} hand)")
-    print(f"  Current config: P=1.5, I=0, D=0, ff=0.0001")
+    print(f"  DG5F PID Tuning Test Suite ({args.hand} hand)")
+    print(f"  Controller: pid_controller/PidController")
+    print(f"  Current config: P=1.5, I=0, D=0")
     print("=" * 60)
 
     try:
@@ -369,24 +362,23 @@ def main():
 
         # Final: return to zero
         print("\n  Returning to home position...")
-        node.send_positions([0.0] * 20, duration_s=1.0)
+        node.send_positions([0.0] * 20)
         node.spin_for(2.0)
 
         print("\n" + "=" * 60)
         print("  Tuning Parameter Reference")
         print("=" * 60)
-        print("  Config: dg5f_driver/config/dg5f_right_controller.yaml")
+        print("  Config: dg5f_driver/config/dg5f_right_pid_all_controller.yaml")
         print("  Parameters per joint (gains.{joint_name}):")
         print("    p: proportional (higher=faster, risk oscillation)")
         print("    i: integral (eliminates steady-state error)")
         print("    d: derivative (dampens oscillation)")
         print("    i_clamp_max/min: limits integral windup")
-        print("    ff_velocity_scale: velocity feedforward")
         print("  After editing, restart the driver to apply.")
 
     except KeyboardInterrupt:
         print("\n  Interrupted. Sending zero...")
-        node.send_positions([0.0] * 20, duration_s=1.0)
+        node.send_positions([0.0] * 20)
         node.spin_for(1.0)
     finally:
         node.destroy_node()
