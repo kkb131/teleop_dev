@@ -58,33 +58,52 @@ sudo ldconfig
 
 ## 필요한 파일
 
-압축 해제 후 다음 파일이 이 디렉토리에 있어야 합니다:
+다운로드 후 다음 구조가 되어야 합니다:
 
 ```
 sdk/
-├── libManusSDK_Integrated.so   # Integrated Mode 라이브러리
-├── libManusSDK.so              # Remote Mode 라이브러리 (선택)
-├── ManusSDK.h                  # C API 헤더
-├── ManusSDKTypes.h             # 타입 정의 헤더
-└── (기타 SDK 파일들)
+├── README.md                  # 이 파일
+├── build.sh                   # SDK 빌드 스크립트
+└── SDKClient_Linux/
+    ├── ManusSDK/
+    │   ├── include/
+    │   │   ├── ManusSDK.h
+    │   │   ├── ManusSDKTypes.h
+    │   │   └── ManusSDKTypeInitializers.h
+    │   └── lib/               # ← .so 파일 배치 위치
+    │       ├── libManusSDK_Integrated.so  (112MB, Integrated Mode)
+    │       └── libManusSDK.so             (138MB, Remote Mode)
+    ├── SDKClient.cpp
+    ├── SDKClient.hpp
+    ├── Makefile
+    └── (기타 소스 파일)
+```
+
+> `.so` 파일은 git에 포함되지 않습니다 (용량 250MB). 각 PC에서 별도 다운로드 필요.
+
+## 빌드
+
+```bash
+cd sender/hand/sdk
+./build.sh
+# SDKClient_Linux/SDKClient_Linux.out 생성 확인
 ```
 
 ## 확인
 
 ```bash
-# 라이브러리 파일 확인
-ls -la sender/hand/sdk/libManusSDK*.so
+# 라이브러리 파일 존재 확인
+ls -lh sender/hand/sdk/SDKClient_Linux/ManusSDK/lib/*.so
 
 # 심볼 확인
-nm -D sender/hand/sdk/libManusSDK_Integrated.so | grep -i "CoreSdk"
+nm -D sender/hand/sdk/SDKClient_Linux/ManusSDK/lib/libManusSDK_Integrated.so | grep -i "CoreSdk"
 
 # 의존 라이브러리 확인
-ldd sender/hand/sdk/libManusSDK_Integrated.so
+ldd sender/hand/sdk/SDKClient_Linux/ManusSDK/lib/libManusSDK_Integrated.so
 ```
 
 ## 주의사항
 
-- SDK 파일은 `.gitignore`에 추가되어 있습니다 (라이선스 제약)
-- 각 테스트 PC에서 별도로 다운로드/배치해야 합니다
-- SDK 버전에 따라 `manus_reader.py`의 ctypes 매핑 업데이트가 필요할 수 있습니다
-- SDK 버전 변경 시 `ManusSDKTypes.h`의 struct 레이아웃을 확인하세요
+- `.so` 파일은 `.gitignore`에 포함되어 있으므로 git clone 후 수동 배치 필요
+- 각 PC에서 Manus 포털에서 다운로드하거나, 기존 PC에서 `scp`로 복사
+- SDK 버전에 따라 `manus_reader.py`의 subprocess 호출이 달라질 수 있음
