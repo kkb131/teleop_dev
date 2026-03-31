@@ -9,12 +9,22 @@ Usage:
     python3 -m robot.hand.tests.test_pose --hand right --hold 3.0
     python3 -m robot.hand.tests.test_pose --hand right --pose spread
     python3 -m robot.hand.tests.test_pose --hand right --pose fist
+
+Record mode (teach poses by hand):
+    1. Manually move DG5F to desired spread position
+    2. python3 -m robot.hand.tests.test_pose --hand right --record spread
+    3. Manually move DG5F to desired fist position
+    4. python3 -m robot.hand.tests.test_pose --hand right --record fist
+    Saved to: robot/hand/config/poses.json
 """
 
 import argparse
+import json
 import math
+import os
 import time
 
+import numpy as np
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
@@ -84,6 +94,52 @@ POSES = {
     "fist":   {"right": FIST_RIGHT,   "left": FIST_LEFT},
 }
 
+# ─────────────────────────────────────────────────────────
+# Poses JSON file (overrides hardcoded defaults if present)
+# ─────────────────────────────────────────────────────────
+
+POSES_JSON = os.path.join(os.path.dirname(__file__), "..", "config", "poses.json")
+
+
+def _load_poses_json():
+    """Load saved poses from JSON, overriding hardcoded defaults."""
+    if not os.path.exists(POSES_JSON):
+        return
+    try:
+        with open(POSES_JSON, "r") as f:
+            saved = json.load(f)
+        for pose_name in ["spread", "fist"]:
+            for hand_side in ["right", "left"]:
+                key = f"{pose_name}_{hand_side}"
+                if key in saved:
+                    POSES[pose_name][hand_side] = saved[key]
+                    print(f"  [poses.json] Loaded {pose_name}/{hand_side} from saved file")
+    except Exception as e:
+        print(f"  [WARN] Failed to load poses.json: {e}")
+
+
+def _save_pose_json(pose_name: str, hand_side: str, values: list):
+    """Save a single pose to JSON (preserving other poses)."""
+    saved = {}
+    if os.path.exists(POSES_JSON):
+        try:
+            with open(POSES_JSON, "r") as f:
+                saved = json.load(f)
+        except Exception:
+            pass
+
+    key = f"{pose_name}_{hand_side}"
+    saved[key] = [round(v, 6) for v in values]
+
+    os.makedirs(os.path.dirname(POSES_JSON), exist_ok=True)
+    with open(POSES_JSON, "w") as f:
+        json.dump(saved, f, indent=2)
+    print(f"  Saved to: {POSES_JSON}")
+
+
+# Load saved poses on import
+_load_poses_json()
+
 
 class PoseNode(Node):
     def __init__(self, hand: str):
@@ -136,6 +192,9 @@ def main():
                         help="Send a single pose instead of the full sequence")
     parser.add_argument("--loop", action="store_true",
                         help="Loop spread→fist continuously until Ctrl+C")
+    parser.add_argument("--record", default=None,
+                        choices=["spread", "fist"],
+                        help="Record current joint_states as a pose preset")
     args = parser.parse_args()
 
     rclpy.init()
@@ -148,7 +207,41 @@ def main():
         return
 
     try:
-        if args.pose:
+        if args.record:
+            # Record mode: read joint_states and save as pose preset
+            print(f"\n  === RECORD MODE: {args.record} ({args.hand} hand) ===")
+            print(f"  Move the DG5F hand to the desired '{args.record}' position.")
+            print(f"  Press Enter when ready to record...")
+            input()
+
+            # Sample joint_states multiple times for stability
+            print("  Sampling joint_states (10 samples)...")
+            samples = []
+            for _ in range(10):
+                node.spin_for(0.05)
+                if node._js_latest and len(node._js_latest.position) >= 20:
+                    samples.append(list(node._js_latest.position[:20]))
+            if not samples:
+                print("  [ERROR] No joint_states received!")
+            else:
+                mean_pos = np.mean(samples, axis=0).tolist()
+
+                # Print recorded values
+                finger_names = ["Thumb", "Index", "Middle", "Ring", "Pinky"]
+                print(f"\n  Recorded '{args.record}' pose ({args.hand}):")
+                for fi, fname in enumerate(finger_names):
+                    vals = mean_pos[fi*4:(fi+1)*4]
+                    degs = [math.degrees(v) for v in vals]
+                    print(f"    {fname:8s}: [{', '.join(f'{v:+7.3f}' for v in vals)}] rad")
+                    print(f"    {'':8s}  [{', '.join(f'{v:+6.1f}°' for v in degs)}]")
+
+                # Save
+                _save_pose_json(args.record, args.hand, mean_pos)
+                POSES[args.record][args.hand] = mean_pos
+                print(f"\n  Updated POSES['{args.record}']['{args.hand}']")
+                print(f"  Test with: python3 -m robot.hand.tests.test_pose --hand {args.hand} --pose {args.record}")
+
+        elif args.pose:
             # Single pose
             pose = POSES[args.pose][args.hand]
             print(f"\n  Sending pose: {args.pose}")
