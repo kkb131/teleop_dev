@@ -52,6 +52,7 @@ class ManusReceiver:
         self._running = False
         self._pkt_count = 0
         self._last_recv_time = 0.0
+        self._reload_requested = False
 
     def start(self):
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -82,11 +83,23 @@ class ManusReceiver:
     def last_recv_time(self) -> float:
         return self._last_recv_time
 
+    @property
+    def reload_requested(self) -> bool:
+        if self._reload_requested:
+            self._reload_requested = False
+            return True
+        return False
+
     def _recv_loop(self):
         while self._running:
             try:
                 raw, _ = self._sock.recvfrom(4096)
                 pkt = json.loads(raw.decode())
+
+                # Handle reload trigger from calibrate_retarget
+                if pkt.get("type") == "reload_config":
+                    self._reload_requested = True
+                    continue
 
                 data = HandData(
                     joint_angles=np.array(pkt["joint_angles"], dtype=np.float32),
@@ -232,6 +245,17 @@ def main():
     try:
         while not shutdown.is_set():
             t0 = time.perf_counter()
+
+            # Check for config reload trigger
+            if receiver.reload_requested:
+                print("\n\n  [RELOAD] Reloading config...")
+                cfg = TesolloConfig.load(args.config)
+                retarget = ManusToD5FRetarget(
+                    hand_side=cfg.hand.side,
+                    calibration_factors=cfg.retarget.calibration_factors,
+                )
+                filtered_dg5f = None  # reset EMA
+                print("  [RELOAD] Calibration updated!\n")
 
             # Process ROS2 callbacks (joint_states feedback)
             if client is not None:

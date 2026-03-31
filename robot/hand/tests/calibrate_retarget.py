@@ -291,7 +291,13 @@ def main():
         vals = ", ".join(f"{new_cal[f_idx*4+j]:.3f}" for j in range(4))
         print(f"    {FINGER_NAMES[f_idx]:7s}: [{vals}]")
 
-    print(f"\n  Restart receiver.py to apply the new calibration.")
+    # Send reload trigger to receiver.py via UDP
+    print(f"\n  Sending reload trigger to receiver (port {args.port})...")
+    trigger_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    trigger_msg = json.dumps({"type": "reload_config"}).encode()
+    trigger_sock.sendto(trigger_msg, ("127.0.0.1", args.port))
+    trigger_sock.close()
+    print(f"  Receiver will apply new calibration automatically.")
     print(f"{'=' * 65}")
 
 
