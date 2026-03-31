@@ -19,9 +19,8 @@ import threading
 import numpy as np
 import rclpy
 from rclpy.node import Node
-from rclpy.duration import Duration
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
-from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+from control_msgs.msg import MultiDOFCommand
 from sensor_msgs.msg import JointState
 
 NUM_MOTORS = 20
@@ -62,16 +61,18 @@ class DG5FROS2Client(Node):
         self._motion_time_s = motion_time_ms / 1000.0
 
         prefix = f"dg5f_{hand_side}"
+        side_prefix = "rj" if hand_side == "right" else "lj"
         self._joint_names = RIGHT_JOINT_NAMES if hand_side == "right" else LEFT_JOINT_NAMES
 
-        # Publisher (BEST_EFFORT to match dg5f_driver controller QoS)
-        traj_topic = f"/{prefix}/{prefix}_controller/joint_trajectory"
+        # Publisher for PidController (MultiDOFCommand)
+        pid_topic = f"/{prefix}/{side_prefix}_dg_pospid/reference"
         qos = QoSProfile(
             depth=10,
             reliability=ReliabilityPolicy.BEST_EFFORT,
             durability=DurabilityPolicy.VOLATILE,
         )
-        self._pub = self.create_publisher(JointTrajectory, traj_topic, qos)
+        self._pub = self.create_publisher(MultiDOFCommand, pid_topic, qos)
+        self.get_logger().info(f"[DG5F-ROS2] Publishing to: {pid_topic}")
 
         # Subscriber for feedback
         js_topic = f"/{prefix}/joint_states"
@@ -81,7 +82,7 @@ class DG5FROS2Client(Node):
         self._has_feedback = False
         self._sub = self.create_subscription(JointState, js_topic, self._js_cb, 10)
 
-        self.get_logger().info(f"[DG5F-ROS2] {hand_side} hand → {traj_topic}")
+        self.get_logger().info(f"[DG5F-ROS2] {hand_side} hand feedback: {js_topic}")
 
     def _js_cb(self, msg: JointState):
         with self._lock:
@@ -112,17 +113,13 @@ class DG5FROS2Client(Node):
         self.get_logger().info("[DG5F-ROS2] stop() — managed by dg5f_driver")
 
     def set_positions(self, angles_rad: list | np.ndarray):
-        """Publish target positions as JointTrajectory."""
+        """Publish target positions as MultiDOFCommand to PidController."""
         if len(angles_rad) != NUM_MOTORS:
             raise ValueError(f"Expected {NUM_MOTORS} angles, got {len(angles_rad)}")
 
-        msg = JointTrajectory()
-        msg.joint_names = self._joint_names
-
-        point = JointTrajectoryPoint()
-        point.positions = [float(a) for a in angles_rad]
-        point.time_from_start = Duration(seconds=self._motion_time_s).to_msg()
-        msg.points = [point]
+        msg = MultiDOFCommand()
+        msg.dof_names = list(self._joint_names)
+        msg.values = [float(a) for a in angles_rad]
 
         self._pub.publish(msg)
 
