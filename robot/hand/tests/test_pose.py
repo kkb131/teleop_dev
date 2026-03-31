@@ -217,14 +217,31 @@ def main():
             # Sample joint_states multiple times for stability
             print("  Sampling joint_states (10 samples)...")
             samples = []
+            js_names = None
             for _ in range(10):
                 node.spin_for(0.05)
                 if node._js_latest and len(node._js_latest.position) >= 20:
-                    samples.append(list(node._js_latest.position[:20]))
-            if not samples:
+                    if js_names is None:
+                        js_names = list(node._js_latest.name)
+                    samples.append(list(node._js_latest.position))
+            if not samples or js_names is None:
                 print("  [ERROR] No joint_states received!")
             else:
-                mean_pos = np.mean(samples, axis=0).tolist()
+                raw_mean = np.mean(samples, axis=0)
+
+                # Reorder from joint_states name order → RIGHT_JOINTS order
+                target_joints = node._joints
+                name_to_idx = {name: i for i, name in enumerate(js_names)}
+                mean_pos = []
+                for jname in target_joints:
+                    if jname in name_to_idx:
+                        mean_pos.append(float(raw_mean[name_to_idx[jname]]))
+                    else:
+                        print(f"  [WARN] Joint '{jname}' not found in joint_states!")
+                        mean_pos.append(0.0)
+
+                print(f"\n  joint_states order: {js_names[:5]}...")
+                print(f"  target order:      {target_joints[:5]}...")
 
                 # Print recorded values
                 finger_names = ["Thumb", "Index", "Middle", "Ring", "Pinky"]
