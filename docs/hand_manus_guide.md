@@ -67,12 +67,12 @@ Manus Quantum Metaglove로 손 동작을 캡처하여 Tesollo DG5F 로봇 핸드
 ### 2.1 SDK 다운로드
 
 Manus SDK Linux 버전을 [공식 문서](https://docs.manus-meta.com/3.1.0/Plugins/SDK/Linux/)에서 다운로드.
-`operator/hand/sdk/SDKClient_Linux/` 디렉토리에 배치.
+`sender/hand/sdk/SDKClient_Linux/` 디렉토리에 배치.
 
 ### 2.2 SDK 빌드
 
 ```bash
-cd teleop_dev/operator/hand/sdk
+cd teleop_dev/sender/hand/sdk
 ./build.sh
 ```
 
@@ -104,7 +104,7 @@ ls /dev/hidraw*
 사용자마다 손 크기가 다르므로, 관절 각도 범위를 캘리브레이션한다.
 
 ```bash
-python3 -m operator.hand.calibrate \
+python3 -m sender.hand.calibrate \
   --hand right \
   --output calibration_right.json \
   --samples 100
@@ -139,7 +139,7 @@ python3 -m operator.hand.calibrate \
 ### 기본 실행
 
 ```bash
-python3 -m operator.hand.manus_sender \
+python3 -m sender.hand.manus_sender \
   --target-ip 192.168.0.10 \
   --hand right
 ```
@@ -165,7 +165,7 @@ python3 -m operator.hand.manus_sender \
 | + / = | 속도 증가 |
 | - | 속도 감소 |
 
-### 설정 파일 (`operator/hand/config/default.yaml`)
+### 설정 파일 (`sender/hand/config/default.yaml`)
 
 ```yaml
 network:
@@ -182,7 +182,7 @@ joint_mapping:
   calibration_file: null    # calibration_right.json 경로
 
 sdk:
-  bin_path: "operator/hand/sdk/SDKClient_Linux/SDKClient_Linux.out"
+  bin_path: "sender/hand/sdk/SDKClient_Linux/SDKClient_Linux.out"
 ```
 
 ---
@@ -193,13 +193,13 @@ sdk:
 
 ```bash
 # SDK 직접 연결 (글러브 필요)
-python3 -m operator.hand.hand_visualizer --sdk
+python3 -m sender.hand.hand_visualizer --sdk
 
 # UDP 수신 모드 (sender가 이미 실행 중일 때)
-python3 -m operator.hand.hand_visualizer --udp --port 9872
+python3 -m sender.hand.hand_visualizer --udp --port 9872
 
 # Mock 데이터 (하드웨어 없이 테스트)
-python3 -m operator.hand.hand_visualizer
+python3 -m sender.hand.hand_visualizer
 ```
 
 pygame 기반 2D 스켈레톤 + 관절 각도 바 차트를 표시.
@@ -394,11 +394,11 @@ python3 -m robot.hand.tests.test_direct_pub --hand right --target 0.0
 
 | 단계 | 조종 PC | 로봇 PC |
 |------|---------|---------|
-| 1. SDK 빌드 | `cd operator/hand/sdk && ./build.sh` | - |
-| 2. 캘리브레이션 | `python3 -m operator.hand.calibrate --hand right` | - |
+| 1. SDK 빌드 | `cd sender/hand/sdk && ./build.sh` | - |
+| 2. 캘리브레이션 | `python3 -m sender.hand.calibrate --hand right` | - |
 | 3. 드라이버 시작 | - | `ros2 launch dg5f_driver dg5f_right_driver.launch.py delto_ip:=169.254.186.72` |
 | 4. Receiver 시작 | - | `python3 -m robot.hand.receiver --hand right` |
-| 5. Sender 시작 | `python3 -m operator.hand.manus_sender --target-ip <로봇IP>` | (자동 수신) |
+| 5. Sender 시작 | `python3 -m sender.hand.manus_sender --target-ip <로봇IP>` | (자동 수신) |
 | 6. 동작 확인 | 손을 움직여서 확인 | DG5F 핸드 동작 확인 |
 
 ---

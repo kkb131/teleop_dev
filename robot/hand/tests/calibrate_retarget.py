@@ -13,7 +13,7 @@ Procedure:
 Requires (all running simultaneously):
     T1: ros2 launch dg5f_driver dg5f_right_pid_all_controller.launch.py
     T2: python3 -m robot.hand.receiver --hand right
-    T3: (operator PC) python3 -m operator.hand.manus_sender
+    T3: (operator PC) python3 -m sender.hand.manus_sender
 
 Usage:
     python3 -m robot.hand.tests.calibrate_retarget --hand right
@@ -165,7 +165,7 @@ def main():
     print("\n  Prerequisites:")
     print("    T1: ros2 launch dg5f_driver dg5f_right_pid_all_controller.launch.py")
     print("    T2: python3 -m robot.hand.receiver --hand right")
-    print("    T3: (operator) python3 -m operator.hand.manus_sender")
+    print("    T3: (operator) python3 -m sender.hand.manus_sender")
 
     rclpy.init()
     node = CalibNode(hand=args.hand)

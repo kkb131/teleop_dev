@@ -34,7 +34,7 @@ teleop_dev/
 │   ├── arm_protocol.py                #   UDP 9871: TeleopPosePacket, ButtonState, query/response
 │   └── hand_protocol.py               #   UDP 9872: HandData (20 finger joints)
 │
-├── operator/                          # 조종 PC (Windows/Linux, ROS2 불필요)
+├── sender/                            # 조종 PC (Windows/Linux, ROS2 불필요)
 │   ├── arm/                           #   팔 입력장치 → UDP 9871
 │   │   ├── sender_base.py             #     모든 arm sender의 ABC (UDP 전송, 포즈 누적)
 │   │   ├── vive_sender.py             #     Vive Tracker 3.0 sender (openvr)
@@ -116,7 +116,7 @@ teleop_dev/
 
 | 질문 | 답 | 해당 경로 |
 |------|---|----------|
-| 이 코드 어디서 실행? | `operator/` = 조종 PC, `robot/` = 로봇 PC | 1차 분류 |
+| 이 코드 어디서 실행? | `sender/` = 조종 PC, `robot/` = 로봇 PC | 1차 분류 |
 | 어떤 서브시스템? | `arm/` = UR10e 팔, `hand/` = DG5F 손 | 2차 분류 |
 | 통신 규격은? | `protocol/` = 양쪽 공유 wire format | 독립 모듈 |
 
@@ -173,13 +173,13 @@ teleop_dev/
 
 ```bash
 # Vive 트래커 → 팔 teleop
-python3 -m operator.arm.vive_sender --target-ip 10.0.0.5
+python3 -m sender.arm.vive_sender --target-ip 10.0.0.5
 
 # 키보드 → 팔 teleop
-python3 -m operator.arm.keyboard_sender --target-ip 10.0.0.5
+python3 -m sender.arm.keyboard_sender --target-ip 10.0.0.5
 
 # Manus 글러브 → 손 teleop
-python3 -m operator.hand.manus_sender --target-ip 10.0.0.5
+python3 -m sender.hand.manus_sender --target-ip 10.0.0.5
 ```
 
 ### 로봇 PC (AGX Orin)
@@ -202,7 +202,7 @@ python3 -m robot.hand.receiver --hand-ip 169.254.186.72
 
 ## 의존성
 
-### 조종 PC (operator/)
+### 조종 PC (sender/)
 
 | 패키지 | 용도 |
 |--------|------|
@@ -235,8 +235,8 @@ from protocol.arm_protocol import TeleopPosePacket, ButtonState
 from protocol.hand_protocol import HandData, NUM_JOINTS
 
 # 조종 PC
-from operator.arm.sender_base import TeleopSenderBase
-from operator.arm.vive_tracker import ViveTracker
+from sender.arm.sender_base import TeleopSenderBase
+from sender.arm.vive_tracker import ViveTracker
 
 # 로봇 PC
 from robot.config import JOINT_NAMES, URDF_PATH

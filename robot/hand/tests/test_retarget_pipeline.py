@@ -21,7 +21,7 @@ import time
 import numpy as np
 
 sys.path.insert(0, ".")
-from operator.hand.manus_reader import (
+from sender.hand.manus_reader import (
     ManusReader, FINGER_NAMES, JOINT_NAMES_PER_FINGER,
     JOINTS_PER_FINGER, DEFAULT_SDK_BIN,
 )

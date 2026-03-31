@@ -44,10 +44,10 @@ SteamVR 좌표계를 로봇 base_link 좌표계에 맞추는 과정.
 cd /workspaces/tamp_ws/src/teleop_dev
 
 # 1. 연결된 트래커 확인
-python3 -m operator.arm.vive_sender --list-trackers
+python3 -m sender.arm.vive_sender --list-trackers
 
 # 2. 3점 캘리브레이션 실행
-python3 -m operator.arm.calibrate --output my_calibration.json
+python3 -m sender.arm.calibrate --output my_calibration.json
 ```
 
 **3점 캘리브레이션 순서**:
@@ -62,17 +62,17 @@ python3 -m operator.arm.calibrate --output my_calibration.json
 
 ```bash
 # 기본 실행
-python3 -m operator.arm.vive_sender \
+python3 -m sender.arm.vive_sender \
   --target-ip 192.168.0.10 \
   --calibration my_calibration.json
 
 # YAML 설정 파일 사용
-python3 -m operator.arm.vive_sender \
-  --config operator/arm/config/default.yaml \
+python3 -m sender.arm.vive_sender \
+  --config sender/arm/config/default.yaml \
   --target-ip 192.168.0.10
 
 # 특정 트래커 지정
-python3 -m operator.arm.vive_sender \
+python3 -m sender.arm.vive_sender \
   --target-ip 192.168.0.10 \
   --tracker-serial LHR-XXXXXXXX
 ```
@@ -104,7 +104,7 @@ python3 -m operator.arm.vive_sender \
 - **상대 매핑** (기본): 트래커의 **이동량(delta)**을 로봇에 적용. 손을 내려놓고 다시 들어도 연속 동작.
 - 캘리브레이션 변환이 delta에 적용되므로 로봇 좌표계 기준으로 정확히 이동.
 
-### 설정 파일 (`operator/arm/config/default.yaml`)
+### 설정 파일 (`sender/arm/config/default.yaml`)
 
 ```yaml
 network:
@@ -139,11 +139,11 @@ mapping_mode: "relative"
 ### 실행
 
 ```bash
-python3 -m operator.arm.keyboard_sender \
+python3 -m sender.arm.keyboard_sender \
   --target-ip 192.168.0.10
 
 # 스텝 크기 조절
-python3 -m operator.arm.keyboard_sender \
+python3 -m sender.arm.keyboard_sender \
   --target-ip 192.168.0.10 \
   --cart-step 0.01 \
   --rot-step 0.1
@@ -206,11 +206,11 @@ python3 -m operator.arm.keyboard_sender \
 ### 실행
 
 ```bash
-python3 -m operator.arm.joystick_sender \
+python3 -m sender.arm.joystick_sender \
   --target-ip 192.168.0.10
 
 # 포트 변경
-python3 -m operator.arm.joystick_sender \
+python3 -m sender.arm.joystick_sender \
   --target-ip 192.168.0.10 \
   --port 9870
 ```
@@ -271,7 +271,7 @@ python3 -m robot.arm.impedance.main \
 조종 PC에서 전송되는 패킷을 실시간으로 확인:
 
 ```bash
-python3 -m operator.arm.monitor --port 9871
+python3 -m sender.arm.monitor --port 9871
 ```
 
 포즈, 버튼 상태, 전송 빈도 등을 실시간 대시보드로 표시.
@@ -317,7 +317,7 @@ python3 -m operator.arm.monitor --port 9871
 | 단계 | 조종 PC | 로봇 PC |
 |------|---------|---------|
 | 1 | - | `python3 -m robot.arm.admittance.main --mode rtde --input unified --robot-ip 192.168.0.2` |
-| 2 | `python3 -m operator.arm.keyboard_sender --target-ip <로봇IP>` | (자동 수신) |
+| 2 | `python3 -m sender.arm.keyboard_sender --target-ip <로봇IP>` | (자동 수신) |
 | 3 | 키보드 W/A/S/D로 이동 확인 | 로봇 움직임 확인 |
 
 Vive 사용 시 2번을 `vive_sender`로 교체. 조이스틱 사용 시 `joystick_sender`로 교체.

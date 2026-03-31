@@ -1,0 +1,15 @@
+network:
+  target_ip: "192.168.0.10"
+  port: 9872
+  hz: 60
+
+hand:
+  side: "right"
+  dongle_id: 0
+
+joint_mapping:
+  num_joints: 20
+  calibration_file: null
+
+sdk:
+  bin_path: "sender/hand/sdk/SDKClient_Linux/SDKClient_Linux.out"

@@ -57,7 +57,7 @@ steam steam://run/250820
 ### 1.4 Manus SDK 빌드 (Manus 글러브 사용 시)
 
 ```bash
-cd teleop_dev/operator/hand/sdk
+cd teleop_dev/sender/hand/sdk
 ./build.sh
 # SDKClient_Linux.out 생성 확인
 ls SDKClient_Linux/SDKClient_Linux.out
@@ -69,16 +69,16 @@ ls SDKClient_Linux/SDKClient_Linux.out
 conda activate teleop_operator
 
 # 키보드 sender (가장 간단한 테스트)
-python3 -m operator.arm.keyboard_sender --target-ip 192.168.0.10
+python3 -m sender.arm.keyboard_sender --target-ip 192.168.0.10
 
 # Vive Tracker 목록 확인
-python3 -m operator.arm.vive_sender --list-trackers
+python3 -m sender.arm.vive_sender --list-trackers
 
 # Vive sender
-python3 -m operator.arm.vive_sender --target-ip 192.168.0.10
+python3 -m sender.arm.vive_sender --target-ip 192.168.0.10
 
 # Manus sender
-python3 -m operator.hand.manus_sender --target-ip 192.168.0.10
+python3 -m sender.hand.manus_sender --target-ip 192.168.0.10
 ```
 
 ### 1.6 PYTHONPATH 설정
@@ -106,7 +106,7 @@ cd teleop_dev/docker/operator
 ./build_image.sh
 
 # 실행 (키보드 sender)
-./run_container.sh python3 -m operator.arm.keyboard_sender --target-ip 192.168.0.10
+./run_container.sh python3 -m sender.arm.keyboard_sender --target-ip 192.168.0.10
 
 # 대화형 셸
 ./run_container.sh
@@ -234,7 +234,7 @@ python3 -m robot.arm.admittance.main --mode rtde --input unified --robot-ip 192.
 
 ## 의존성 요약
 
-### 조종 PC (operator/)
+### 조종 PC (sender/)
 
 | 패키지 | 출처 | 용도 |
 |--------|------|------|

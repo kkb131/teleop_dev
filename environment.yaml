@@ -2,10 +2,10 @@
 # teleop_dev sender 실행 환경 — ROS2 불필요
 #
 # 실행 예시:
-#   python3 -m operator.arm.vive_sender     --target-ip <ROBOT_IP>
-#   python3 -m operator.arm.keyboard_sender  --target-ip <ROBOT_IP>
-#   python3 -m operator.arm.joystick_sender  --target-ip <ROBOT_IP>
-#   python3 -m operator.hand.manus_sender    --target-ip <ROBOT_IP>
+#   python3 -m sender.arm.vive_sender     --target-ip <ROBOT_IP>
+#   python3 -m sender.arm.keyboard_sender  --target-ip <ROBOT_IP>
+#   python3 -m sender.arm.joystick_sender  --target-ip <ROBOT_IP>
+#   python3 -m sender.hand.manus_sender    --target-ip <ROBOT_IP>
 #
 # Setup:
 #   conda env create -f environment.yaml
