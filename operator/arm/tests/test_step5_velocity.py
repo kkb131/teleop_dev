@@ -4,7 +4,7 @@
 Sends mock UDP packets simulating known trajectories, then reads
 the velocity output from ViveNetworkInput. NO SteamVR required.
 
-Usage: python3 -m vive.tests.test_step5_velocity [--port 9872]
+Usage: python3 -m operator.arm.tests.test_step5_velocity [--port 9872]
 """
 
 import argparse
@@ -54,7 +54,7 @@ def main():
 
     # Import ViveNetworkInput here (requires standalone package)
     try:
-        from teleop_dev.robot.core.input_handler import ViveNetworkInput
+        from robot.core.input_handler import ViveNetworkInput
     except ImportError:
         print("[FAIL] Cannot import ViveNetworkInput")
         print("       Run from: cd /workspaces/tamp_ws/src/tamp_dev")

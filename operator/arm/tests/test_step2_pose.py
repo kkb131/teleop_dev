@@ -8,7 +8,7 @@ Reads pose data for a duration and validates:
 - Actual read frequency
 
 Requirements: SteamVR running, tracker paired and tracked
-Usage: python3 -m vive.tests.test_step2_pose [--duration 3] [--serial LHR-xxx]
+Usage: python3 -m operator.arm.tests.test_step2_pose [--duration 3] [--serial LHR-xxx]
 """
 
 import argparse
@@ -17,7 +17,7 @@ import time
 
 import numpy as np
 
-from teleop_dev.operator.arm.vive_tracker import ViveTracker
+from operator.arm.vive_tracker import ViveTracker
 
 
 def main():

@@ -5,7 +5,7 @@ Push the robot by hand and it should follow compliantly.
 
 Usage:
     cd /workspaces/tamp_ws/src/tamp_dev
-    python3 -m standalone.teleop_admittance.test_admittance --robot-ip 192.168.0.2
+    python3 -m robot.arm.admittance.test_admittance --robot-ip 192.168.0.2
 """
 
 import argparse
@@ -18,11 +18,11 @@ import tty
 import numpy as np
 import pinocchio as pin
 
-from teleop_dev.robot.config import URDF_PATH, RTDE_FREQUENCY
-from teleop_dev.robot.core.robot_backend import create_backend
-from teleop_dev.robot.core.ft_source import RTDEFTSource, BaseFrameFTSource
-from teleop_dev.robot.core.pink_ik import PinkIK
-from teleop_dev.robot.core.compliant_control import (
+from robot.config import URDF_PATH, RTDE_FREQUENCY
+from robot.core.robot_backend import create_backend
+from robot.core.ft_source import RTDEFTSource, BaseFrameFTSource
+from robot.core.pink_ik import PinkIK
+from robot.core.compliant_control import (
     AdmittanceController,
     COMPLIANCE_PRESETS,
 )

@@ -12,11 +12,11 @@ Procedure:
 
 Requires (all running simultaneously):
     T1: ros2 launch dg5f_driver dg5f_right_pid_all_controller.launch.py
-    T2: python3 -m teleop_dev.robot.hand.receiver --hand right
-    T3: (operator PC) python3 -m teleop_dev.operator.hand.manus_sender
+    T2: python3 -m robot.hand.receiver --hand right
+    T3: (operator PC) python3 -m operator.hand.manus_sender
 
 Usage:
-    python3 -m teleop_dev.robot.hand.tests.calibrate_retarget --hand right
+    python3 -m robot.hand.tests.calibrate_retarget --hand right
 """
 
 import argparse
@@ -32,7 +32,7 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
 
-from teleop_dev.robot.hand.retarget import (
+from robot.hand.retarget import (
     ManusToD5FRetarget, RIGHT_LIMITS, LEFT_LIMITS,
     DEFAULT_CALIBRATION_FACTORS,
 )
@@ -164,8 +164,8 @@ def main():
     print("=" * 65)
     print("\n  Prerequisites:")
     print("    T1: ros2 launch dg5f_driver dg5f_right_pid_all_controller.launch.py")
-    print("    T2: python3 -m teleop_dev.robot.hand.receiver --hand right")
-    print("    T3: (operator) python3 -m teleop_dev.operator.hand.manus_sender")
+    print("    T2: python3 -m robot.hand.receiver --hand right")
+    print("    T3: (operator) python3 -m operator.hand.manus_sender")
 
     rclpy.init()
     node = CalibNode(hand=args.hand)

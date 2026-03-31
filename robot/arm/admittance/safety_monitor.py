@@ -5,8 +5,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from teleop_dev.robot.core.robot_backend import RobotBackend
-from teleop_dev.robot.arm.admittance.teleop_config import SafetyConfig
+from robot.core.robot_backend import RobotBackend
+from robot.arm.admittance.teleop_config import SafetyConfig
 
 
 @dataclass

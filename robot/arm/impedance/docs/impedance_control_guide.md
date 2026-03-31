@@ -74,7 +74,7 @@ pin.computeCoriolisMatrix(model, data, q, qd)
 tau_coriolis = data.C @ qd  # C(q,qd) * q_dot
 ```
 
-- `standalone/teleop_impedance/urscript_manager.py`의 `get_coriolis()` 메서드
+- `robot/arm/impedance/urscript_manager.py`의 `get_coriolis()` 메서드
 - Pinocchio가 URDF에서 로봇 동역학 모델을 빌드하여 계산
 - 활성화: `config/default.yaml`의 `impedance.enable_coriolis_comp: true`
 

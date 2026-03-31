@@ -684,7 +684,7 @@ class UnifiedNetworkInput(InputHandler):
             self._sock = None
 
     def get_command(self, timeout: float = 0.02) -> TeleopCommand:
-        from teleop_dev.protocol.arm_protocol import (
+        from protocol.arm_protocol import (
             TeleopPosePacket,
             is_query_pose,
             make_pose_response_bytes,

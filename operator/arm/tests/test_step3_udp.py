@@ -6,13 +6,13 @@ Can be run on any machine including the robot PC.
 
 Usage:
     # Terminal 1 — receiver
-    python3 -m vive.tests.test_step3_udp --mode recv --port 9871
+    python3 -m operator.arm.tests.test_step3_udp --mode recv --port 9871
 
     # Terminal 2 — sender (mock data)
-    python3 -m vive.tests.test_step3_udp --mode send --target-ip 127.0.0.1 --port 9871
+    python3 -m operator.arm.tests.test_step3_udp --mode send --target-ip 127.0.0.1 --port 9871
 
     # Auto mode — runs both in same process (loopback test)
-    python3 -m vive.tests.test_step3_udp --mode auto --port 9871
+    python3 -m operator.arm.tests.test_step3_udp --mode auto --port 9871
 """
 
 import argparse

@@ -4,7 +4,7 @@
 Checks that all required system packages and Python modules are installed.
 No hardware (dongle/gloves) required for this step.
 
-Usage: python3 -m manus.tests.test_step0_deps
+Usage: python3 -m operator.hand.tests.test_step0_deps
 """
 
 import shutil

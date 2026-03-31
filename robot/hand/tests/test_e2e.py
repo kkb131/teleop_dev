@@ -8,7 +8,7 @@ No hardware required. Simulates the full pipeline:
   4. Validates output quality
 
 Usage:
-    python3 -m tesollo.tests.test_e2e
+    python3 -m robot.hand.tests.test_e2e
 """
 
 import json
@@ -19,8 +19,8 @@ import time
 
 import numpy as np
 
-from teleop_dev.robot.hand.receiver import ManusReceiver
-from teleop_dev.robot.hand.retarget import ManusToD5FRetarget, RIGHT_LIMITS
+from robot.hand.receiver import ManusReceiver
+from robot.hand.retarget import ManusToD5FRetarget, RIGHT_LIMITS
 
 
 TEST_PORT = 19873  # Avoid conflicts with real receiver
@@ -209,7 +209,7 @@ def main():
 
     # ── Print sample output ─────────────────────────────
     print(f"\n  Sample retarget output (last frame):")
-    from teleop_dev.robot.hand.dg5f_client import RIGHT_JOINT_NAMES
+    from robot.hand.dg5f_client import RIGHT_JOINT_NAMES
     print(f"  {'Joint':12s} {'Manus(rad)':>12s} {'DG5F(rad)':>12s} {'DG5F(deg)':>10s}")
     print(f"  {'-' * 48}")
     for i in range(20):
@@ -229,9 +229,9 @@ def _summary(passed, failed):
     if failed == 0:
         print("  [ALL PASS] E2E pipeline verified!")
         print("  Next steps:")
-        print("    1. python3 -m tesollo.tests.test_modbus --ip <DG5F_IP>")
-        print("    2. python3 -m tesollo.receiver --dry-run")
-        print("    3. python3 -m tesollo.receiver --hand-ip <DG5F_IP>")
+        print("    1. python3 -m robot.hand.tests.test_modbus --ip <DG5F_IP>")
+        print("    2. python3 -m robot.hand.receiver --dry-run")
+        print("    3. python3 -m robot.hand.receiver --hand-ip <DG5F_IP>")
     else:
         print("  [ISSUES] Fix the above failures")
     print(f"{'=' * 55}")

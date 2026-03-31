@@ -6,10 +6,10 @@ Can run with or without actual glove hardware (uses mock data if unavailable).
 
 Usage:
     # With mock data (no hardware needed):
-    python3 -m manus.tests.test_step4_udp
+    python3 -m operator.hand.tests.test_step4_udp
 
     # With real glove:
-    python3 -m manus.tests.test_step4_udp --real --sdk-path manus/sdk/libManusSDK.so
+    python3 -m operator.hand.tests.test_step4_udp --real --sdk-path operator/hand/sdk/libManusSDK.so
 """
 
 import argparse
@@ -21,7 +21,7 @@ import time
 
 import numpy as np
 
-from teleop_dev.operator.hand.manus_reader import HandData, NUM_JOINTS, NUM_FINGERS
+from operator.hand.manus_reader import HandData, NUM_JOINTS, NUM_FINGERS
 
 
 TEST_PORT = 19872  # Use a different port to avoid conflicts
@@ -101,7 +101,7 @@ def main():
     parser = argparse.ArgumentParser(description="Step 4: UDP test")
     parser.add_argument("--real", action="store_true",
                         help="Use real glove instead of mock data")
-    parser.add_argument("--sdk-path", default="manus/sdk/SDKClient_Linux/SDKClient_Linux.out",
+    parser.add_argument("--sdk-path", default="operator/hand/sdk/SDKClient_Linux/SDKClient_Linux.out",
                         help="Path to SDKClient_Linux.out (only with --real)")
     parser.add_argument("--num-packets", type=int, default=100,
                         help="Number of test packets (default: 100)")
@@ -133,7 +133,7 @@ def main():
     if args.real:
         print("[TEST] Connect to Manus SDK...", end=" ")
         try:
-            from teleop_dev.operator.hand.manus_reader import ManusReader
+            from operator.hand.manus_reader import ManusReader
             reader = ManusReader(sdk_bin_path=args.sdk_path)
             reader.connect()
             print("[PASS]")
@@ -281,7 +281,7 @@ def _summary(passed, failed):
     if failed == 0:
         print("  [ALL PASS] Step 4 complete!")
         print("  Ready for robot PC integration.")
-        print("  Next: python3 -m manus.manus_sender --target-ip <ROBOT_IP>")
+        print("  Next: python3 -m operator.hand.manus_sender --target-ip <ROBOT_IP>")
     else:
         print("  [ISSUES] Fix the above failures before proceeding")
     print(f"{'=' * 55}")

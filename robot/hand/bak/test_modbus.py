@@ -9,8 +9,8 @@ Tests:
   - Write test position (optional, with --write flag)
 
 Usage:
-    python3 -m tesollo.tests.test_modbus --ip 169.254.186.72
-    python3 -m tesollo.tests.test_modbus --ip 169.254.186.72 --write
+    python3 -m robot.hand.tests.test_modbus --ip 169.254.186.72
+    python3 -m robot.hand.tests.test_modbus --ip 169.254.186.72 --write
 """
 
 import argparse
@@ -18,7 +18,7 @@ import sys
 
 import numpy as np
 
-from teleop_dev.robot.hand.dg5f_client import DG5FClient, NUM_MOTORS
+from robot.hand.dg5f_client import DG5FClient, NUM_MOTORS
 
 
 def main():
@@ -155,7 +155,7 @@ def _summary(passed, failed):
     print(f"  Results: {passed}/{total} passed, {failed}/{total} failed")
     if failed == 0:
         print("  [ALL PASS] DG5F Modbus communication OK!")
-        print("  Next: python3 -m tesollo.receiver --hand-ip <IP> --dry-run")
+        print("  Next: python3 -m robot.hand.receiver --hand-ip <IP> --dry-run")
     else:
         print("  [ISSUES] Fix the above failures")
     print(f"{'=' * 55}")

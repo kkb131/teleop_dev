@@ -6,8 +6,8 @@ Tests:
   torque     — Upload minimal direct_torque script (zero torque, gravity comp only)
 
 Usage:
-  python3 -m standalone.teleop_impedance.test_urscript_upload --robot-ip 192.168.0.2 --test freedrive
-  python3 -m standalone.teleop_impedance.test_urscript_upload --robot-ip 192.168.0.2 --test torque
+  python3 -m robot.arm.impedance.test_urscript_upload --robot-ip 192.168.0.2 --test freedrive
+  python3 -m robot.arm.impedance.test_urscript_upload --robot-ip 192.168.0.2 --test torque
 """
 
 import argparse

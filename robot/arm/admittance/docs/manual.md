@@ -1,6 +1,6 @@
 # teleop_admittance/ 학습 매뉴얼 — 어드미턴스 텔레옵 (난이도 ★★★)
 
-> **위치**: `standalone/teleop_admittance/`
+> **위치**: `robot/arm/admittance/`
 > **의존 core 모듈**: `robot_backend`, `pink_ik`, `exp_filter`, `input_handler`, `compliant_control`, `ft_source`, `controller_utils`
 > **학습 선수 지식**: [core/ 매뉴얼](../../core/docs/manual.md) §2 (로봇 통신), §4.2 (Pink IK), §6 (필터), §8 (컴플라이언스)
 

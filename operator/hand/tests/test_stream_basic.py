@@ -3,9 +3,9 @@
 and Python subprocess reading.
 
 Usage:
-    python3 -m manus.tests.test_stream_basic
-    python3 -m manus.tests.test_stream_basic --sdk-path manus/sdk/SDKClient_Linux/SDKClient_Linux.out
-    python3 -m manus.tests.test_stream_basic --duration 10
+    python3 -m operator.hand.tests.test_stream_basic
+    python3 -m operator.hand.tests.test_stream_basic --sdk-path operator/hand/sdk/SDKClient_Linux/SDKClient_Linux.out
+    python3 -m operator.hand.tests.test_stream_basic --duration 10
 """
 
 import argparse
@@ -20,7 +20,7 @@ from pathlib import Path
 def main():
     parser = argparse.ArgumentParser(description="Basic stream JSON test")
     parser.add_argument("--sdk-path",
-                        default="manus/sdk/SDKClient_Linux/SDKClient_Linux.out",
+                        default="operator/hand/sdk/SDKClient_Linux/SDKClient_Linux.out",
                         help="Path to SDKClient_Linux.out")
     parser.add_argument("--duration", type=float, default=5.0,
                         help="Test duration in seconds (default: 5)")

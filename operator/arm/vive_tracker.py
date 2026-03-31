@@ -5,7 +5,7 @@ Reads 6-DOF pose (position + orientation) from a Vive Tracker.
 Requires SteamVR running and the tracker paired + tracked.
 
 Usage (standalone test):
-    python3 -m vive.vive_tracker [--serial <TRACKER_SERIAL>]
+    python3 -m operator.arm.vive_tracker [--serial <TRACKER_SERIAL>]
 """
 
 import argparse

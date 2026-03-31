@@ -5,10 +5,10 @@ Verifies that the SDKClient_Linux.out binary exists and USB
 dongle is detected.
 
 Requirements:
-    - SDKClient_Linux.out built (bash manus/sdk/build.sh)
+    - SDKClient_Linux.out built (bash operator/hand/sdk/build.sh)
     - Manus USB dongle plugged in (optional)
 
-Usage: python3 -m manus.tests.test_step1_sdk [--sdk-path manus/sdk/SDKClient_Linux/SDKClient_Linux.out]
+Usage: python3 -m operator.hand.tests.test_step1_sdk [--sdk-path operator/hand/sdk/SDKClient_Linux/SDKClient_Linux.out]
 """
 
 import argparse
@@ -21,7 +21,7 @@ from pathlib import Path
 def main():
     parser = argparse.ArgumentParser(description="Step 1: SDK binary check")
     parser.add_argument("--sdk-path",
-                        default="manus/sdk/SDKClient_Linux/SDKClient_Linux.out",
+                        default="operator/hand/sdk/SDKClient_Linux/SDKClient_Linux.out",
                         help="Path to SDKClient_Linux.out")
     args = parser.parse_args()
 

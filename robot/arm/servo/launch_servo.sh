@@ -1,7 +1,7 @@
 #!/bin/bash
 # Servo 기능 실행 가이드
 #
-# 사용법: bash standalone/servo/launch_servo.sh [mode]
+# 사용법: bash robot/arm/servo/launch_servo.sh [mode]
 #   mode: keyboard_forward  - Forward Position Controller 키보드 테스트
 #         keyboard_servo    - MoveIt Servo 키보드 Cartesian 텔레옵
 #         joystick_servo    - MoveIt Servo Xbox 조이스틱 텔레옵
@@ -35,7 +35,7 @@ show_info() {
     echo "    ros2 launch isaac_ros_cumotion_examples ur.launch.py ur_type:=ur10e"
     echo ""
     echo -e "    ${YELLOW}# T3: Keyboard teleop${NC}"
-    echo "    cd ${WS_DIR}/src/tamp_dev && python3 -m standalone.servo.keyboard_forward"
+    echo "    cd ${WS_DIR}/src/tamp_dev && python3 -m robot.arm.servo.keyboard_forward"
     echo ""
     echo -e "${GREEN}[2] MoveIt Servo (키보드 Cartesian)${NC}"
     echo "    Cartesian 제어. 충돌 체크 + 특이점 감지 내장."
@@ -69,7 +69,7 @@ case "$MODE" in
     keyboard_forward)
         echo -e "${GREEN}Starting Forward Position Controller keyboard teleop...${NC}"
         cd "${WS_DIR}/src/tamp_dev"
-        python3 -m standalone.servo.keyboard_forward
+        python3 -m robot.arm.servo.keyboard_forward
         ;;
     keyboard_servo)
         echo -e "${GREEN}Starting MoveIt Servo keyboard Cartesian teleop...${NC}"

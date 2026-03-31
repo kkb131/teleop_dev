@@ -9,13 +9,13 @@ Requires dg5f_driver running:
 
 Usage:
     # Dry-run (no hardware — just receive + retarget + print):
-    python3 -m teleop_dev.robot.hand.receiver --dry-run
+    python3 -m robot.hand.receiver --dry-run
 
     # ROS2 mode (dg5f_driver must be running):
-    python3 -m teleop_dev.robot.hand.receiver --hand right
+    python3 -m robot.hand.receiver --hand right
 
     # With config file:
-    python3 -m teleop_dev.robot.hand.receiver --config config/default.yaml
+    python3 -m robot.hand.receiver --config config/default.yaml
 """
 
 import argparse
@@ -29,9 +29,9 @@ from typing import Optional
 
 import numpy as np
 
-from teleop_dev.protocol.hand_protocol import HandData, NUM_JOINTS, NUM_FINGERS
-from teleop_dev.robot.hand.retarget import ManusToD5FRetarget
-from teleop_dev.robot.hand.tesollo_config import TesolloConfig
+from protocol.hand_protocol import HandData, NUM_JOINTS, NUM_FINGERS
+from robot.hand.retarget import ManusToD5FRetarget
+from robot.hand.tesollo_config import TesolloConfig
 
 
 # ─────────────────────────────────────────────────────────
@@ -194,7 +194,7 @@ def main():
     if not args.dry_run:
         import rclpy
         rclpy.init()
-        from teleop_dev.robot.hand.dg5f_ros2_client import DG5FROS2Client
+        from robot.hand.dg5f_ros2_client import DG5FROS2Client
         client = DG5FROS2Client(
             hand_side=cfg.hand.side,
             motion_time_ms=cfg.control.motion_time_ms,

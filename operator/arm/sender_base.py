@@ -22,7 +22,7 @@ from typing import Optional, Tuple
 
 import numpy as np
 
-from teleop_dev.protocol.arm_protocol import (
+from protocol.arm_protocol import (
     ButtonState,
     TeleopPosePacket,
     make_query_pose_bytes,

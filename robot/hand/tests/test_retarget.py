@@ -8,7 +8,7 @@ No hardware required — uses mock Manus data to verify:
   - Left/right symmetry
 
 Usage:
-    python3 -m tesollo.tests.test_retarget
+    python3 -m robot.hand.tests.test_retarget
 """
 
 import math
@@ -16,7 +16,7 @@ import sys
 
 import numpy as np
 
-from teleop_dev.robot.hand.retarget import ManusToD5FRetarget, RIGHT_LIMITS, LEFT_LIMITS
+from robot.hand.retarget import ManusToD5FRetarget, RIGHT_LIMITS, LEFT_LIMITS
 
 
 def main():

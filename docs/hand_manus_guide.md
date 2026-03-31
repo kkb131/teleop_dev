@@ -104,7 +104,7 @@ ls /dev/hidraw*
 사용자마다 손 크기가 다르므로, 관절 각도 범위를 캘리브레이션한다.
 
 ```bash
-python3 -m teleop_dev.operator.hand.calibrate \
+python3 -m operator.hand.calibrate \
   --hand right \
   --output calibration_right.json \
   --samples 100
@@ -139,7 +139,7 @@ python3 -m teleop_dev.operator.hand.calibrate \
 ### 기본 실행
 
 ```bash
-python3 -m teleop_dev.operator.hand.manus_sender \
+python3 -m operator.hand.manus_sender \
   --target-ip 192.168.0.10 \
   --hand right
 ```
@@ -193,13 +193,13 @@ sdk:
 
 ```bash
 # SDK 직접 연결 (글러브 필요)
-python3 -m teleop_dev.operator.hand.hand_visualizer --sdk
+python3 -m operator.hand.hand_visualizer --sdk
 
 # UDP 수신 모드 (sender가 이미 실행 중일 때)
-python3 -m teleop_dev.operator.hand.hand_visualizer --udp --port 9872
+python3 -m operator.hand.hand_visualizer --udp --port 9872
 
 # Mock 데이터 (하드웨어 없이 테스트)
-python3 -m teleop_dev.operator.hand.hand_visualizer
+python3 -m operator.hand.hand_visualizer
 ```
 
 pygame 기반 2D 스켈레톤 + 관절 각도 바 차트를 표시.
@@ -248,13 +248,13 @@ ros2 topic list | grep dg5f
 
 ```bash
 source ~/ws/install/setup.bash
-python3 -m teleop_dev.robot.hand.receiver --hand right
+python3 -m robot.hand.receiver --hand right
 ```
 
 ### Dry-run (하드웨어 없이)
 
 ```bash
-python3 -m teleop_dev.robot.hand.receiver --dry-run
+python3 -m robot.hand.receiver --dry-run
 ```
 
 UDP 수신 + retarget 결과만 출력, ROS2 발행 안 함.
@@ -292,7 +292,7 @@ UDP 수신 + retarget 결과만 출력, ROS2 발행 안 함.
 동일한 5x4 구조. `ManusToD5FRetarget`이 Manus 각도를 DG5F 모터 각도로 변환.
 
 ```python
-from teleop_dev.robot.hand.retarget import ManusToD5FRetarget
+from robot.hand.retarget import ManusToD5FRetarget
 
 retarget = ManusToD5FRetarget(hand_side="right")
 dg5f_angles = retarget.retarget(manus_angles)  # ndarray[20] → ndarray[20]
@@ -348,7 +348,7 @@ Left hand: `rj_` → `lj_`
 
 ```python
 import rclpy
-from teleop_dev.robot.hand.dg5f_ros2_client import DG5FROS2Client
+from robot.hand.dg5f_ros2_client import DG5FROS2Client
 
 rclpy.init()
 client = DG5FROS2Client(hand_side="right", motion_time_ms=500)
@@ -364,13 +364,13 @@ rclpy.shutdown()
 
 ```bash
 # dg5f_driver 실행 중인 상태에서:
-python3 -m teleop_dev.robot.hand.tests.test_zero_ros2 --hand right
+python3 -m robot.hand.tests.test_zero_ros2 --hand right
 ```
 
 ### 직접 토픽 발행 테스트
 
 ```bash
-python3 -m teleop_dev.robot.hand.tests.test_direct_pub --hand right --target 0.0
+python3 -m robot.hand.tests.test_direct_pub --hand right --target 0.0
 ```
 
 ---
@@ -395,10 +395,10 @@ python3 -m teleop_dev.robot.hand.tests.test_direct_pub --hand right --target 0.0
 | 단계 | 조종 PC | 로봇 PC |
 |------|---------|---------|
 | 1. SDK 빌드 | `cd operator/hand/sdk && ./build.sh` | - |
-| 2. 캘리브레이션 | `python3 -m teleop_dev.operator.hand.calibrate --hand right` | - |
+| 2. 캘리브레이션 | `python3 -m operator.hand.calibrate --hand right` | - |
 | 3. 드라이버 시작 | - | `ros2 launch dg5f_driver dg5f_right_driver.launch.py delto_ip:=169.254.186.72` |
-| 4. Receiver 시작 | - | `python3 -m teleop_dev.robot.hand.receiver --hand right` |
-| 5. Sender 시작 | `python3 -m teleop_dev.operator.hand.manus_sender --target-ip <로봇IP>` | (자동 수신) |
+| 4. Receiver 시작 | - | `python3 -m robot.hand.receiver --hand right` |
+| 5. Sender 시작 | `python3 -m operator.hand.manus_sender --target-ip <로봇IP>` | (자동 수신) |
 | 6. 동작 확인 | 손을 움직여서 확인 | DG5F 핸드 동작 확인 |
 
 ---

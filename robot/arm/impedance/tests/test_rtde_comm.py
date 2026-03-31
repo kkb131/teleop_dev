@@ -4,7 +4,7 @@
 Tests each communication capability individually.
 Run on a machine connected to the robot:
 
-  python3 -m standalone.teleop_impedance.test_rtde_comm --robot-ip 192.168.0.2
+  python3 -m robot.arm.impedance.test_rtde_comm --robot-ip 192.168.0.2
 
 Results are printed as PASS/FAIL for each test.
 """
@@ -119,7 +119,7 @@ def test_pinocchio_coriolis(ip: str) -> bool:
     try:
         import pinocchio as pin
         import rtde_receive
-        from teleop_dev.robot.config import URDF_PATH
+        from robot.config import URDF_PATH
 
         model = pin.buildModelFromUrdf(URDF_PATH)
         data = model.createData()

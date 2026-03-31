@@ -16,7 +16,7 @@ DG5F joint layout (per finger, 4 joints each):
     lj_dg_[1-5]_[1-4]  (left hand)
 
 Usage:
-    from teleop_dev.robot.hand.retarget import ManusToD5FRetarget
+    from robot.hand.retarget import ManusToD5FRetarget
 
     retarget = ManusToD5FRetarget(hand_side="right")
     dg5f_angles = retarget.retarget(manus_angles)  # ndarray[20] → ndarray[20]
@@ -289,7 +289,7 @@ def main():
         -0.1, 0.5, 0.6, 0.25,
     ], dtype=np.float64)
 
-    from teleop_dev.robot.hand.dg5f_client import RIGHT_JOINT_NAMES, LEFT_JOINT_NAMES
+    from robot.hand.dg5f_client import RIGHT_JOINT_NAMES, LEFT_JOINT_NAMES
     names = RIGHT_JOINT_NAMES if args.hand == "right" else LEFT_JOINT_NAMES
 
     dg5f = retarget.retarget(manus)

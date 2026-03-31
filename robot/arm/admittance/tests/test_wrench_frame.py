@@ -8,9 +8,9 @@ Two modes:
 Usage:
     cd /workspaces/tamp_ws/src/tamp_dev
     # Sensor reading only
-    python3 -m standalone.teleop_admittance.test_wrench_frame --robot-ip 192.168.0.2
+    python3 -m robot.arm.admittance.test_wrench_frame --robot-ip 192.168.0.2
     # End-to-end servo test
-    python3 -m standalone.teleop_admittance.test_wrench_frame --robot-ip 192.168.0.2 --servo
+    python3 -m robot.arm.admittance.test_wrench_frame --robot-ip 192.168.0.2 --servo
 """
 
 import argparse
@@ -23,11 +23,11 @@ import tty
 import numpy as np
 import pinocchio as pin
 
-from teleop_dev.robot.config import URDF_PATH, RTDE_FREQUENCY
-from teleop_dev.robot.core.robot_backend import create_backend
-from teleop_dev.robot.core.ft_source import rotvec_to_matrix
-from teleop_dev.robot.core.pink_ik import PinkIK
-from teleop_dev.robot.core.compliant_control import (
+from robot.config import URDF_PATH, RTDE_FREQUENCY
+from robot.core.robot_backend import create_backend
+from robot.core.ft_source import rotvec_to_matrix
+from robot.core.pink_ik import PinkIK
+from robot.core.compliant_control import (
     AdmittanceController,
     COMPLIANCE_PRESETS,
 )

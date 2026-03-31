@@ -12,4 +12,4 @@ joint_mapping:
   calibration_file: null
 
 sdk:
-  bin_path: "manus/sdk/SDKClient_Linux/SDKClient_Linux.out"
+  bin_path: "operator/hand/sdk/SDKClient_Linux/SDKClient_Linux.out"

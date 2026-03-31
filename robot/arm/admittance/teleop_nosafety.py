@@ -8,10 +8,10 @@ Use this for testing admittance teleop without safety constraints.
 
 Usage:
   # Sim mode (mock hardware or Isaac Sim)
-  python3 -m standalone.teleop_admittance.teleop_nosafety --mode sim --input keyboard
+  python3 -m robot.arm.admittance.teleop_nosafety --mode sim --input keyboard
 
   # Real robot
-  python3 -m standalone.teleop_admittance.teleop_nosafety --mode rtde --input keyboard --robot-ip 192.168.0.2
+  python3 -m robot.arm.admittance.teleop_nosafety --mode rtde --input keyboard --robot-ip 192.168.0.2
 """
 
 import argparse
@@ -24,13 +24,13 @@ from typing import Optional
 import numpy as np
 import pinocchio as pin
 
-from teleop_dev.robot.config import URDF_PATH
-from teleop_dev.robot.core.robot_backend import create_backend, RobotBackend
-from teleop_dev.robot.arm.admittance.teleop_config import TeleopConfig
-from teleop_dev.robot.core.exp_filter import ExpFilter
-from teleop_dev.robot.core.pink_ik import PinkIK
-from teleop_dev.robot.core.input_handler import create_input, InputHandler
-from teleop_dev.robot.arm.admittance.admittance_layer import AdmittanceLayer
+from robot.config import URDF_PATH
+from robot.core.robot_backend import create_backend, RobotBackend
+from robot.arm.admittance.teleop_config import TeleopConfig
+from robot.core.exp_filter import ExpFilter
+from robot.core.pink_ik import PinkIK
+from robot.core.input_handler import create_input, InputHandler
+from robot.arm.admittance.admittance_layer import AdmittanceLayer
 
 
 HELP_KEYBOARD = """\
@@ -120,7 +120,7 @@ class TeleopNoSafety:
         try:
             import rclpy
             from rclpy.node import Node
-            from teleop_dev.robot.core.controller_utils import ControllerSwitcher
+            from robot.core.controller_utils import ControllerSwitcher
         except ImportError:
             return
 

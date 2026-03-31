@@ -90,7 +90,7 @@ SteamVR 좌표계와 로봇 좌표계를 정렬합니다.
 
 ```bash
 cd /workspaces/tamp_ws/src/tamp_dev
-python3 -m vive.calibrate --output vive/calibration.json
+python3 -m operator.arm.calibrate --output vive/calibration.json
 ```
 
 3개 포인트를 순서대로 측정:
@@ -101,7 +101,7 @@ python3 -m vive.calibrate --output vive/calibration.json
 ### 2.2 캘리브레이션 검증
 
 ```bash
-python3 -m vive.calibrate --verify vive/calibration.json
+python3 -m operator.arm.calibrate --verify vive/calibration.json
 ```
 
 실시간으로 트래커 위치가 로봇 좌표계로 변환되어 출력됩니다.
@@ -115,10 +115,10 @@ python3 -m vive.calibrate --verify vive/calibration.json
 cd /workspaces/tamp_ws/src/tamp_dev
 
 # 트래커 목록 확인
-python3 -m vive.vive_tracker --list
+python3 -m operator.arm.vive_tracker --list
 
 # 실시간 포즈 확인
-python3 -m vive.vive_tracker --hz 50
+python3 -m operator.arm.vive_tracker --hz 50
 ```
 
 ### 3.2 조종 PC에서 sender 실행
@@ -128,13 +128,13 @@ cd ~/tamp_ws/src/tamp_dev
 conda activate tamp_sender
 
 # 기본 (첫 번째 트래커 사용, 50Hz, 통합 프로토콜)
-python3 -m vive.vive_sender --target-ip <ROBOT_PC_IP>
+python3 -m operator.arm.vive_sender --target-ip <ROBOT_PC_IP>
 
 # 캘리브레이션 적용
-python3 -m vive.vive_sender --target-ip <ROBOT_PC_IP> --calibration vive/calibration.json
+python3 -m operator.arm.vive_sender --target-ip <ROBOT_PC_IP> --calibration vive/calibration.json
 
 # 특정 트래커 지정
-python3 -m vive.vive_sender --target-ip 192.168.0.10 --tracker-serial LHR-XXXXXXXX
+python3 -m operator.arm.vive_sender --target-ip 192.168.0.10 --tracker-serial LHR-XXXXXXXX
 ```
 
 **키보드 단축키 (조종 PC에서):**
@@ -152,15 +152,15 @@ python3 -m vive.vive_sender --target-ip 192.168.0.10 --tracker-serial LHR-XXXXXX
 cd /workspaces/tamp_ws/src/tamp_dev
 
 # Admittance 모드 (통합 프로토콜)
-python3 -m standalone.teleop_admittance.main \
+python3 -m robot.arm.admittance.main \
     --mode rtde --input unified --robot-ip 192.168.0.2
 
 # Impedance 모드
-python3 -m standalone.teleop_impedance.main \
+python3 -m robot.arm.impedance.main \
     --mode rtde --input unified --robot-ip 192.168.0.2
 
 # Sim 모드 (mock hardware 테스트)
-python3 -m standalone.teleop_admittance.main \
+python3 -m robot.arm.admittance.main \
     --mode sim --input unified
 ```
 
@@ -182,7 +182,7 @@ python3 -m standalone.teleop_admittance.main \
 ### "No Vive Tracker found" 에러
 - SteamVR이 실행 중인지 확인
 - null driver 설정이 적용되었는지 확인
-- `python3 -m vive.vive_tracker --list`로 디바이스 확인
+- `python3 -m operator.arm.vive_tracker --list`로 디바이스 확인
 
 ### UDP 패킷이 수신되지 않음
 - 방화벽 확인: `sudo ufw allow 9871/udp`
@@ -214,7 +214,7 @@ cd /workspaces/tamp_ws/src/tamp_dev
 SteamVR 연결 + 디바이스 목록 확인.
 
 ```bash
-python3 -m vive.tests.test_step1_openvr
+python3 -m operator.arm.tests.test_step1_openvr
 ```
 ```
 # 예상 출력:
@@ -234,7 +234,7 @@ python3 -m vive.tests.test_step1_openvr
 100프레임 읽어서 위치 범위, 쿼터니언 정규화, 주파수 검증.
 
 ```bash
-python3 -m vive.tests.test_step2_pose --duration 3
+python3 -m operator.arm.tests.test_step2_pose --duration 3
 ```
 ```
 # 예상 출력:
@@ -254,13 +254,13 @@ Mock 데이터로 UDP 송수신 검증. **Vive 불필요.**
 
 ```bash
 # 자동 모드 (loopback 테스트, 터미널 1개)
-python3 -m vive.tests.test_step3_udp --port 9873
+python3 -m operator.arm.tests.test_step3_udp --port 9873
 
 # 수동 모드 (두 터미널)
 # Terminal 1 - 수신
-python3 -m vive.tests.test_step3_udp --mode recv --port 9873
+python3 -m operator.arm.tests.test_step3_udp --mode recv --port 9873
 # Terminal 2 - 송신
-python3 -m vive.tests.test_step3_udp --mode send --target-ip 127.0.0.1 --port 9873
+python3 -m operator.arm.tests.test_step3_udp --mode send --target-ip 127.0.0.1 --port 9873
 ```
 ```
 # 예상 출력:
@@ -278,7 +278,7 @@ python3 -m vive.tests.test_step3_udp --mode send --target-ip 127.0.0.1 --port 98
 알려진 입력으로 R, t 계산 → 결과 검증. **Vive 불필요.**
 
 ```bash
-python3 -m vive.tests.test_step4_calibration
+python3 -m operator.arm.tests.test_step4_calibration
 ```
 ```
 # 예상 출력:
@@ -296,7 +296,7 @@ python3 -m vive.tests.test_step4_calibration
 Mock UDP 패킷으로 알려진 궤적 전송 → ViveNetworkInput의 velocity 출력 검증. **Vive 불필요.**
 
 ```bash
-python3 -m vive.tests.test_step5_velocity --port 9872
+python3 -m operator.arm.tests.test_step5_velocity --port 9872
 ```
 ```
 # 예상 출력:
@@ -308,7 +308,7 @@ python3 -m vive.tests.test_step5_velocity --port 9872
 ```
 
 **실패 시 확인:**
-- `standalone.core.input_handler`가 import 가능한지 (`cd /workspaces/tamp_ws/src/tamp_dev`)
+- `robot.core.input_handler`가 import 가능한지 (`cd /workspaces/tamp_ws/src/tamp_dev`)
 - `pip install pin-pink proxsuite numpy` 설치 완료 여부
 
 ### Step 6: 실전 E2E 테스트
@@ -317,10 +317,10 @@ python3 -m vive.tests.test_step5_velocity --port 9872
 
 ```bash
 # 조종 PC
-python3 -m vive.vive_sender --target-ip <ROBOT_PC_IP> --port 9871
+python3 -m operator.arm.vive_sender --target-ip <ROBOT_PC_IP> --port 9871
 
 # 로봇 PC (또는 같은 PC의 다른 터미널)
-python3 -m vive.tests.test_step6_e2e_sender --port 9871 --duration 5
+python3 -m operator.arm.tests.test_step6_e2e_sender --port 9871 --duration 5
 ```
 ```
 # 예상 출력:

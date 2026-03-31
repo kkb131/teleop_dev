@@ -1,7 +1,7 @@
 # core/ 모듈별 핵심 가이드 — What · Why · How · 튜닝
 
 > **난이도**: 중급
-> **위치**: `standalone/core/`
+> **위치**: `robot/core/`
 > **목적**: 각 모듈의 핵심 기능, 존재 이유, 동작 원리, 개인 튜닝 포인트를 빠르게 파악
 
 ---
@@ -55,10 +55,10 @@ def create_backend(mode: str, **kwargs) -> RobotBackend
 # robot_backend.py:51-59 — Factory 함수
 def create_backend(mode: str, **kwargs) -> RobotBackend:
     if mode == "rtde":
-        from standalone.core.ur_robot import RTDEBackend   # Lazy import!
+        from robot.core.ur_robot import RTDEBackend   # Lazy import!
         return RTDEBackend(robot_ip=kwargs["robot_ip"])
     elif mode == "sim":
-        from standalone.core.sim_robot import SimBackend
+        from robot.core.sim_robot import SimBackend
         return SimBackend(**{k: v for k, v in kwargs.items() if k != "robot_ip"})
 ```
 

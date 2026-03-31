@@ -4,7 +4,7 @@
 Isolates whether the issue is the script content or URScriptManager's RTDE flow.
 
 Usage:
-  python3 -m standalone.teleop_impedance.test_script_upload --robot-ip 192.168.0.2
+  python3 -m robot.arm.impedance.test_script_upload --robot-ip 192.168.0.2
 """
 
 import argparse

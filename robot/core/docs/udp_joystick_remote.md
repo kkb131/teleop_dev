@@ -319,7 +319,7 @@ input:
 ```bash
 # 로봇 PC (수신)
 cd /workspaces/tamp_ws/src/tamp_dev
-python3 -m standalone.teleop_admittance.main --mode rtde --input network
+python3 -m robot.arm.admittance.main --mode rtde --input network
 
 # 서버 PC (송신)
 python3 joystick_sender.py --target-ip <로봇PC_IP> --port 9870 --hz 50

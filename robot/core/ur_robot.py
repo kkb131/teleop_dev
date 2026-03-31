@@ -9,8 +9,8 @@ try:
 except ImportError:
     RTDE_AVAILABLE = False
 
-from teleop_dev.robot.config import RTDE_FREQUENCY, SERVOJ_DT, SERVOJ_GAIN, SERVOJ_LOOKAHEAD
-from teleop_dev.robot.core.robot_backend import RobotBackend
+from robot.config import RTDE_FREQUENCY, SERVOJ_DT, SERVOJ_GAIN, SERVOJ_LOOKAHEAD
+from robot.core.robot_backend import RobotBackend
 
 
 class RTDEBackend(RobotBackend):

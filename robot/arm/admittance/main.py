@@ -5,13 +5,13 @@ Pipeline: Input -> ExpFilter -> Workspace Clamp -> [Admittance] -> Pink IK -> Sa
 
 Usage:
   # Sim mode (mock hardware or Isaac Sim)
-  python3 -m standalone.teleop_admittance.main --mode sim --input keyboard
+  python3 -m robot.arm.admittance.main --mode sim --input keyboard
 
   # Real robot
-  python3 -m standalone.teleop_admittance.main --mode rtde --input keyboard --robot-ip 192.168.0.2
+  python3 -m robot.arm.admittance.main --mode rtde --input keyboard --robot-ip 192.168.0.2
 
   # With custom config and logging
-  python3 -m standalone.teleop_admittance.main --mode sim --config path/to/config.yaml --log
+  python3 -m robot.arm.admittance.main --mode sim --config path/to/config.yaml --log
 """
 
 import argparse
@@ -27,14 +27,14 @@ from typing import Optional
 import numpy as np
 import pinocchio as pin
 
-from teleop_dev.robot.config import URDF_PATH
-from teleop_dev.robot.core.robot_backend import create_backend, RobotBackend
-from teleop_dev.robot.arm.admittance.teleop_config import TeleopConfig
-from teleop_dev.robot.core.exp_filter import ExpFilter
-from teleop_dev.robot.core.pink_ik import PinkIK
-from teleop_dev.robot.core.input_handler import create_input, InputHandler
-from teleop_dev.robot.arm.admittance.safety_monitor import SafetyMonitor
-from teleop_dev.robot.arm.admittance.admittance_layer import AdmittanceLayer
+from robot.config import URDF_PATH
+from robot.core.robot_backend import create_backend, RobotBackend
+from robot.arm.admittance.teleop_config import TeleopConfig
+from robot.core.exp_filter import ExpFilter
+from robot.core.pink_ik import PinkIK
+from robot.core.input_handler import create_input, InputHandler
+from robot.arm.admittance.safety_monitor import SafetyMonitor
+from robot.arm.admittance.admittance_layer import AdmittanceLayer
 
 
 HELP_KEYBOARD = """\
@@ -155,7 +155,7 @@ class TeleopController:
         try:
             import rclpy
             from rclpy.node import Node
-            from teleop_dev.robot.core.controller_utils import ControllerSwitcher
+            from robot.core.controller_utils import ControllerSwitcher
         except ImportError:
             return
 
@@ -317,7 +317,7 @@ class TeleopController:
             )
 
             # Set pose_provider for unified input (needs IK + backend ready)
-            from teleop_dev.robot.core.input_handler import UnifiedNetworkInput
+            from robot.core.input_handler import UnifiedNetworkInput
             if isinstance(self.input_handler, UnifiedNetworkInput):
                 self.input_handler._pose_provider = lambda: self.ik.get_ee_pose(
                     np.array(self.backend.get_joint_positions())

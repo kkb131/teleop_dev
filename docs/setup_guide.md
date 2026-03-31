@@ -69,16 +69,16 @@ ls SDKClient_Linux/SDKClient_Linux.out
 conda activate teleop_operator
 
 # 키보드 sender (가장 간단한 테스트)
-python3 -m teleop_dev.operator.arm.keyboard_sender --target-ip 192.168.0.10
+python3 -m operator.arm.keyboard_sender --target-ip 192.168.0.10
 
 # Vive Tracker 목록 확인
-python3 -m teleop_dev.operator.arm.vive_sender --list-trackers
+python3 -m operator.arm.vive_sender --list-trackers
 
 # Vive sender
-python3 -m teleop_dev.operator.arm.vive_sender --target-ip 192.168.0.10
+python3 -m operator.arm.vive_sender --target-ip 192.168.0.10
 
 # Manus sender
-python3 -m teleop_dev.operator.hand.manus_sender --target-ip 192.168.0.10
+python3 -m operator.hand.manus_sender --target-ip 192.168.0.10
 ```
 
 ### 1.6 PYTHONPATH 설정
@@ -106,7 +106,7 @@ cd teleop_dev/docker/operator
 ./build_image.sh
 
 # 실행 (키보드 sender)
-./run_container.sh python3 -m teleop_dev.operator.arm.keyboard_sender --target-ip 192.168.0.10
+./run_container.sh python3 -m operator.arm.keyboard_sender --target-ip 192.168.0.10
 
 # 대화형 셸
 ./run_container.sh
@@ -150,11 +150,11 @@ cd teleop_dev/docker/robot
 cd /workspaces/teleop_ws/src/teleop_dev
 
 # 팔 어드미턴스 teleop 실행
-python3 -m teleop_dev.robot.arm.admittance.main \
+python3 -m robot.arm.admittance.main \
   --mode rtde --input unified --robot-ip 192.168.0.2
 
 # 손 receiver 실행
-python3 -m teleop_dev.robot.hand.receiver --hand-ip 169.254.186.72
+python3 -m robot.hand.receiver --hand-ip 169.254.186.72
 ```
 
 ### 3.4 추가 터미널 접속
@@ -227,7 +227,7 @@ source ~/teleop_robot_env/bin/activate
 export PYTHONPATH="/path/to/src:${PYTHONPATH}"
 
 cd /path/to/src/teleop_dev
-python3 -m teleop_dev.robot.arm.admittance.main --mode rtde --input unified --robot-ip 192.168.0.2
+python3 -m robot.arm.admittance.main --mode rtde --input unified --robot-ip 192.168.0.2
 ```
 
 ---

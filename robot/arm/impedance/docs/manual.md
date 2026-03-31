@@ -1,6 +1,6 @@
 # teleop_impedance/ 학습 매뉴얼 — 임피던스 텔레옵 (난이도 ★★★★)
 
-> **위치**: `standalone/teleop_impedance/`
+> **위치**: `robot/arm/impedance/`
 > **의존 core 모듈**: `pink_ik`, `exp_filter`, `input_handler`
 > **학습 선수 지식**: [core/ 매뉴얼](../../core/docs/manual.md) §4.2 (Pink IK), §6 (필터), [teleop_admittance/ 매뉴얼](../../teleop_admittance/docs/manual.md) (어드미턴스와 비교 필수)
 

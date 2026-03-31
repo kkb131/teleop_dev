@@ -5,7 +5,7 @@ Replaces the Modbus-based DG5FClient with ROS2 JointTrajectory publishing.
 Requires dg5f_driver running via ros2 launch.
 
 Usage:
-    from teleop_dev.robot.hand.dg5f_ros2_client import DG5FROS2Client
+    from robot.hand.dg5f_ros2_client import DG5FROS2Client
 
     rclpy.init()
     client = DG5FROS2Client(hand_side="right")

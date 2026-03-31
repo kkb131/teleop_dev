@@ -5,22 +5,22 @@ Verifies that gloves can be connected and ergonomics data
 is received via the SDKClient_Linux subprocess.
 
 Requirements:
-    - SDKClient_Linux.out built (bash manus/sdk/build.sh)
+    - SDKClient_Linux.out built (bash operator/hand/sdk/build.sh)
     - Manus gloves powered on and connected (USB)
 
-Usage: python3 -m manus.tests.test_step2_connection [--sdk-path manus/sdk/SDKClient_Linux/SDKClient_Linux.out]
+Usage: python3 -m operator.hand.tests.test_step2_connection [--sdk-path operator/hand/sdk/SDKClient_Linux/SDKClient_Linux.out]
 """
 
 import argparse
 import sys
 import time
 
-from teleop_dev.operator.hand.manus_reader import ManusReader
+from operator.hand.manus_reader import ManusReader
 
 
 def main():
     parser = argparse.ArgumentParser(description="Step 2: Glove connection test")
-    parser.add_argument("--sdk-path", default="manus/sdk/SDKClient_Linux/SDKClient_Linux.out",
+    parser.add_argument("--sdk-path", default="operator/hand/sdk/SDKClient_Linux/SDKClient_Linux.out",
                         help="Path to SDKClient_Linux.out")
     parser.add_argument("--hand", default="right",
                         choices=["left", "right", "both"],

@@ -6,8 +6,8 @@ with color-coded status, position/orientation, buttons, network stats,
 and a mini position history graph.
 
 Usage:
-    python3 -m vive.monitor --port 9871
-    python3 -m vive.monitor --port 9871 --bind 0.0.0.0
+    python3 -m operator.arm.monitor --port 9871
+    python3 -m operator.arm.monitor --port 9871 --bind 0.0.0.0
 """
 
 import argparse

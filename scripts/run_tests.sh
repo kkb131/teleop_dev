@@ -25,12 +25,12 @@ PHASE=""
 RUN_ALL=false
 HAND_IP="169.254.186.72"
 HAND_PORT=502
-SDK_PATH="manus/sdk/libManusSDK.so"
+SDK_PATH="operator/hand/sdk/libManusSDK.so"
 HAND_SIDE="right"
 
 # SDK 파일 fallback: Integrated 버전 자동 탐색
-if [[ ! -f "$SDK_PATH" ]] && [[ -f "manus/sdk/libManusSDK_Integrated.so" ]]; then
-    SDK_PATH="manus/sdk/libManusSDK_Integrated.so"
+if [[ ! -f "$SDK_PATH" ]] && [[ -f "operator/hand/sdk/libManusSDK_Integrated.so" ]]; then
+    SDK_PATH="operator/hand/sdk/libManusSDK_Integrated.so"
     echo -e "${CYAN}[INFO] Using Integrated SDK: ${SDK_PATH}${NC}"
 fi
 
@@ -144,19 +144,19 @@ run_phase_1() {
     print_header 1 "소프트웨어 검증" "하드웨어 불필요"
 
     run_test "M0" \
-        "python3 -m manus.tests.test_step0_deps" \
+        "python3 -m operator.hand.tests.test_step0_deps" \
         "시스템 의존성 체크 (gcc, libusb, Python, numpy, pynput)"
 
     run_test "T1" \
-        "python3 -m tesollo.tests.test_retarget" \
+        "python3 -m robot.hand.tests.test_retarget" \
         "Manus→DG5F 리타겟 로직 (10개 단위 테스트)"
 
     run_test "T2" \
-        "python3 -m tesollo.tests.test_e2e" \
+        "python3 -m robot.hand.tests.test_e2e" \
         "E2E mock 파이프라인 (UDP→리타겟→검증)"
 
     run_test "M4" \
-        "python3 -m manus.tests.test_step4_udp" \
+        "python3 -m operator.hand.tests.test_step4_udp" \
         "UDP 송수신 (mock 데이터)"
 }
 
@@ -168,7 +168,7 @@ run_phase_2() {
     if [[ ! -f "$SDK_PATH" ]]; then
         echo -e "\n  ${YELLOW}WARNING${NC}: SDK not found at $SDK_PATH"
         echo "  Download from: https://docs.manus-meta.com/2.4.0/Plugins/SDK/Linux/"
-        echo "  Place libManusSDK.so in: manus/sdk/"
+        echo "  Place libManusSDK.so in: operator/hand/sdk/"
         skip_test "M1" "SDK 로드 + 동글 감지" "SDK file not found"
         skip_test "M2" "글러브 연결" "SDK required"
         skip_test "M3" "데이터 스트리밍" "SDK required"
@@ -176,7 +176,7 @@ run_phase_2() {
     fi
 
     run_test "M1" \
-        "python3 -m manus.tests.test_step1_sdk --sdk-path $SDK_PATH" \
+        "python3 -m operator.hand.tests.test_step1_sdk --sdk-path $SDK_PATH" \
         "SDK 로드 + USB 동글 감지"
 
     # M1 결과 확인
@@ -198,7 +198,7 @@ run_phase_2() {
     fi
 
     run_test "M2" \
-        "python3 -m manus.tests.test_step2_connection --hand $HAND_SIDE" \
+        "python3 -m operator.hand.tests.test_step2_connection --hand $HAND_SIDE" \
         "글러브 연결 ($HAND_SIDE)"
 
     if [[ "${TEST_RESULTS[-1]}" == "FAIL" ]]; then
@@ -216,7 +216,7 @@ run_phase_2() {
     fi
 
     run_test "M3" \
-        "python3 -m manus.tests.test_step3_stream --duration 5 --hz 60 --hand $HAND_SIDE" \
+        "python3 -m operator.hand.tests.test_step3_stream --duration 5 --hz 60 --hand $HAND_SIDE" \
         "5초 데이터 스트리밍 (60Hz)"
 }
 
@@ -247,7 +247,7 @@ run_phase_3() {
     fi
 
     run_test "T3" \
-        "python3 -m tesollo.tests.test_modbus --ip $HAND_IP --port $HAND_PORT --hand $HAND_SIDE" \
+        "python3 -m robot.hand.tests.test_modbus --ip $HAND_IP --port $HAND_PORT --hand $HAND_SIDE" \
         "Modbus TCP 연결 + 레지스터 읽기"
 }
 
@@ -262,7 +262,7 @@ run_phase_4() {
     echo "  │  Operator PC (Manus 글러브)                         │"
     echo "  │    conda activate tamp_sender                       │"
     echo "  │    cd ~/tamp_ws/src/tamp_dev                        │"
-    echo "  │    python3 -m manus.manus_sender \\                  │"
+    echo "  │    python3 -m operator.hand.manus_sender \\                  │"
     echo "  │        --target-ip <ROBOT_PC_IP> --hand $HAND_SIDE  │"
     echo "  └──────────────────────────┬──────────────────────────┘"
     echo "                             │ UDP:9872"
@@ -270,17 +270,17 @@ run_phase_4() {
     echo "  │  Robot PC (AGX Orin)                                │"
     echo "  │    conda activate tamp_sender                       │"
     echo "  │    cd ~/tamp_ws/src/tamp_dev                        │"
-    echo "  │    python3 -m tesollo.receiver \\                    │"
+    echo "  │    python3 -m robot.hand.receiver \\                    │"
     echo "  │        --hand-ip $HAND_IP --hand $HAND_SIDE         │"
     echo "  └─────────────────────────────────────────────────────┘"
     echo ""
     echo "  Dry-run (DG5F 없이 리타겟 출력만 확인):"
-    echo "    python3 -m tesollo.receiver --dry-run"
+    echo "    python3 -m robot.hand.receiver --dry-run"
     echo ""
     echo "  비주얼라이저 (Operator PC에서):"
-    echo "    python3 -m manus.hand_visualizer              # mock 데이터"
-    echo "    python3 -m manus.hand_visualizer --sdk        # 실제 글러브"
-    echo "    python3 -m manus.hand_visualizer --udp        # UDP 수신"
+    echo "    python3 -m operator.hand.hand_visualizer              # mock 데이터"
+    echo "    python3 -m operator.hand.hand_visualizer --sdk        # 실제 글러브"
+    echo "    python3 -m operator.hand.hand_visualizer --udp        # UDP 수신"
     echo ""
 }
 

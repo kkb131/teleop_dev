@@ -8,11 +8,11 @@ Requires dg5f_driver running:
     ros2 launch dg5f_driver dg5f_right_pid_all_controller.launch.py delto_ip:=169.254.186.72
 
 Usage:
-    python3 -m teleop_dev.robot.hand.tests.test_tuning --hand right
-    python3 -m teleop_dev.robot.hand.tests.test_tuning --hand right --test zero
-    python3 -m teleop_dev.robot.hand.tests.test_tuning --hand right --test oscillation
-    python3 -m teleop_dev.robot.hand.tests.test_tuning --hand right --test step
-    python3 -m teleop_dev.robot.hand.tests.test_tuning --hand right --test mapping
+    python3 -m robot.hand.tests.test_tuning --hand right
+    python3 -m robot.hand.tests.test_tuning --hand right --test zero
+    python3 -m robot.hand.tests.test_tuning --hand right --test oscillation
+    python3 -m robot.hand.tests.test_tuning --hand right --test step
+    python3 -m robot.hand.tests.test_tuning --hand right --test mapping
 """
 
 import argparse

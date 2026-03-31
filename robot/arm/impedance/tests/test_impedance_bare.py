@@ -5,9 +5,9 @@ Connects to the robot, uploads URScript, and runs a PD position-hold loop.
 The robot should hold its current position via impedance torque control.
 
 Usage:
-  python3 -m standalone.teleop_impedance.test_impedance_bare --robot-ip 192.168.0.2
-  python3 -m standalone.teleop_impedance.test_impedance_bare --robot-ip 192.168.0.2 --preset MEDIUM
-  python3 -m standalone.teleop_impedance.test_impedance_bare --robot-ip 192.168.0.2 --hz 50
+  python3 -m robot.arm.impedance.test_impedance_bare --robot-ip 192.168.0.2
+  python3 -m robot.arm.impedance.test_impedance_bare --robot-ip 192.168.0.2 --preset MEDIUM
+  python3 -m robot.arm.impedance.test_impedance_bare --robot-ip 192.168.0.2 --hz 50
 
 Expected: robot holds position. Push it by hand → resists → returns.
 """
@@ -17,8 +17,8 @@ import time
 
 import numpy as np
 
-from teleop_dev.robot.arm.impedance.urscript_manager import URScriptManager, TORQUE_LIMITS
-from teleop_dev.robot.arm.impedance.impedance_gains import IMPEDANCE_PRESETS
+from robot.arm.impedance.urscript_manager import URScriptManager, TORQUE_LIMITS
+from robot.arm.impedance.impedance_gains import IMPEDANCE_PRESETS
 
 
 def main():

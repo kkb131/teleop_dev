@@ -2,9 +2,9 @@
 """Minimal direct publish test for DG5F PidController reference topic.
 
 Usage:
-    python3 -m teleop_dev.robot.hand.tests.test_direct_pub
-    python3 -m teleop_dev.robot.hand.tests.test_direct_pub --hand right --target 0.5
-    python3 -m teleop_dev.robot.hand.tests.test_direct_pub --hand left --target -0.3
+    python3 -m robot.hand.tests.test_direct_pub
+    python3 -m robot.hand.tests.test_direct_pub --hand right --target 0.5
+    python3 -m robot.hand.tests.test_direct_pub --hand left --target -0.3
 """
 
 import argparse

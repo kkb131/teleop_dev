@@ -11,9 +11,9 @@ Test D: Threaded direct_torque (no RTDE)
 Test E: Thread torque + register read (minimal reproduction of our architecture)
 
 Usage:
-  python3 -m standalone.teleop_impedance.test_torque_diag --robot-ip 192.168.0.2
-  python3 -m standalone.teleop_impedance.test_torque_diag --robot-ip 192.168.0.2 --test B
-  python3 -m standalone.teleop_impedance.test_torque_diag --robot-ip 192.168.0.2 --test E
+  python3 -m robot.arm.impedance.test_torque_diag --robot-ip 192.168.0.2
+  python3 -m robot.arm.impedance.test_torque_diag --robot-ip 192.168.0.2 --test B
+  python3 -m robot.arm.impedance.test_torque_diag --robot-ip 192.168.0.2 --test E
 """
 
 import argparse

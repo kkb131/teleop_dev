@@ -10,7 +10,7 @@ import rclpy
 from rclpy.node import Node
 from controller_manager_msgs.srv import SwitchController, ListControllers
 
-from teleop_dev.robot.config import (
+from robot.config import (
     FORWARD_POSITION_CONTROLLER,
     FORWARD_VELOCITY_CONTROLLER,
     JOINT_NAMES,

@@ -9,8 +9,8 @@ Requirements: numpy
     pip install numpy
 
 Usage:
-    python3 -m vive.keyboard_sender --target-ip <ROBOT_PC_IP>
-    python3 -m vive.keyboard_sender --target-ip 192.168.0.10 --hz 50
+    python3 -m operator.arm.keyboard_sender --target-ip <ROBOT_PC_IP>
+    python3 -m operator.arm.keyboard_sender --target-ip 192.168.0.10 --hz 50
 """
 
 import argparse
@@ -21,12 +21,12 @@ import tty
 
 import numpy as np
 
-from teleop_dev.operator.arm.sender_base import InputResult, TeleopSenderBase
+from operator.arm.sender_base import InputResult, TeleopSenderBase
 
-from teleop_dev.protocol.arm_protocol import ButtonState
+from protocol.arm_protocol import ButtonState
 
 
-# Key → direction mapping (matches standalone/core/input_handler.py KEY_MAP)
+# Key → direction mapping (matches robot/core/input_handler.py KEY_MAP)
 # [dx, dy, dz, drx, dry, drz] — unit direction
 KEY_MAP = {
     "w": [0, 1, 0, 0, 0, 0],    # +Y (forward)

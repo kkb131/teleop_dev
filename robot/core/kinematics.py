@@ -13,7 +13,7 @@ from __future__ import annotations
 import numpy as np
 import pinocchio as pin
 
-from teleop_dev.robot.config import URDF_PATH
+from robot.config import URDF_PATH
 
 # Default frames
 DEFAULT_EE_FRAME = 'tool0'

@@ -7,10 +7,10 @@ a quality report (frequency, tracking rate, noise, latency).
 Requirements: vive_sender.py running on operator PC
 Usage:
     # On operator PC:
-    python3 -m vive.vive_sender --target-ip <THIS_PC_IP> --port 9871
+    python3 -m operator.arm.vive_sender --target-ip <THIS_PC_IP> --port 9871
 
     # On this PC (robot PC):
-    python3 -m vive.tests.test_step6_e2e_sender --port 9871 --duration 5
+    python3 -m operator.arm.tests.test_step6_e2e_sender --port 9871 --duration 5
 """
 
 import argparse

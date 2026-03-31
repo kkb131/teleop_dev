@@ -52,7 +52,7 @@ xdot += xddot * dt
 x += xdot * dt
 ```
 
-**소스 코드** (`standalone/core/compliant_control.py:133-139`):
+**소스 코드** (`robot/core/compliant_control.py:133-139`):
 
 ```python
 # AdmittanceController.update()
@@ -68,7 +68,7 @@ self._x += self._xdot * dt
 
 4개 프리셋은 M/D/K 값 조합으로 서로 다른 순응 특성을 제공합니다.
 
-**소스 코드** (`standalone/core/compliant_control.py:22-43`):
+**소스 코드** (`robot/core/compliant_control.py:22-43`):
 
 | 프리셋 | M (병진/회전) | D (병진/회전) | K (병진/회전) | 특성 |
 |--------|--------------|--------------|--------------|------|
@@ -152,7 +152,7 @@ Pink은 Pinocchio 위에 구축된 QP(Quadratic Programming) 기반 IK 솔버입
 - **PostureTask**: 관절 기본 자세 유지 (joint centering)
 - QP 문제로 formulate하여 관절 한계를 constraint로 처리
 
-**소스 코드** (`standalone/core/pink_ik.py:35-41`):
+**소스 코드** (`robot/core/pink_ik.py:35-41`):
 
 ```python
 # 태스크 설정
@@ -164,7 +164,7 @@ self._ee_task = pink.FrameTask(
 self._posture_task = pink.PostureTask(cost=posture_cost)  # 1e-3 (최저 우선순위)
 ```
 
-**IK 풀이** (`standalone/core/pink_ik.py:75-90`):
+**IK 풀이** (`robot/core/pink_ik.py:75-90`):
 
 ```python
 # 1. 목표 SE3 생성 (base_link 프레임 기준)
@@ -189,7 +189,7 @@ return self._config.q.copy()
 
 입력 명령의 급격한 변화를 완화하여 부드러운 로봇 움직임을 만듭니다.
 
-**소스 코드** (`standalone/core/exp_filter.py`):
+**소스 코드** (`robot/core/exp_filter.py`):
 
 ```python
 # 위치: 선형 EMA (Exponential Moving Average)
@@ -244,7 +244,7 @@ tool0 (EE) 프레임:
 
 #### 입력: base_link 축 기준 각속도
 
-**소스 코드** (`standalone/core/input_handler.py:67-81`):
+**소스 코드** (`robot/core/input_handler.py:67-81`):
 
 ```python
 # KEY_MAP: 키 → (vx, vy, vz, wx, wy, wz) base_link 프레임 기준 단위 방향
@@ -272,7 +272,7 @@ KEY_MAP = {
 
 각속도 입력을 현재 쿼터니언에 적용하는 함수입니다.
 
-**소스 코드** (`standalone/teleop_admittance/main.py:69-85`):
+**소스 코드** (`robot/arm/admittance/main.py:69-85`):
 
 ```python
 def apply_rotation_delta(quat_xyzw, angular_vel, dt):
@@ -362,7 +362,7 @@ EE가 180° 뒤집혀 있으므로 X, Y 축이 반전됩니다.
 
 #### 해결: X, Y 부호 반전
 
-**소스 코드** (`standalone/core/ft_source.py:84-87`):
+**소스 코드** (`robot/core/ft_source.py:84-87`):
 
 ```python
 class BaseFrameFTSource:
@@ -391,7 +391,7 @@ adm_disp = [dx, dy, dz, drx, dry, drz]  # base_link 프레임
 
 이 변위를 목표 pose에 합산하는 과정:
 
-**소스 코드** (`standalone/teleop_admittance/main.py:387-392`):
+**소스 코드** (`robot/arm/admittance/main.py:387-392`):
 
 ```python
 # 어드미턴스 변위 계산 (base_link 기준)
@@ -521,12 +521,12 @@ target_quat = filt_quat.copy()
 
 | 파일 | 역할 |
 |------|------|
-| `standalone/core/compliant_control.py` | AdmittanceController, ComplianceParams, 프리셋 |
-| `standalone/core/ft_source.py` | RTDEFTSource, BaseFrameFTSource (프레임 변환) |
-| `standalone/core/pink_ik.py` | PinkIK (QP IK, SE3 타겟, proxqp) |
-| `standalone/core/exp_filter.py` | ExpFilter (EMA + slerp) |
-| `standalone/core/input_handler.py` | KEY_MAP, KeyboardInput, XboxInput |
-| `standalone/teleop_admittance/main.py` | apply_rotation_delta(), 제어 루프 |
-| `standalone/teleop_admittance/admittance_layer.py` | AdmittanceLayer (F/T→변위 통합) |
-| `standalone/teleop_admittance/safety_monitor.py` | SafetyMonitor (4단계 안전) |
-| `standalone/teleop_admittance/teleop_config.py` | TeleopConfig (YAML 로더) |
+| `robot/core/compliant_control.py` | AdmittanceController, ComplianceParams, 프리셋 |
+| `robot/core/ft_source.py` | RTDEFTSource, BaseFrameFTSource (프레임 변환) |
+| `robot/core/pink_ik.py` | PinkIK (QP IK, SE3 타겟, proxqp) |
+| `robot/core/exp_filter.py` | ExpFilter (EMA + slerp) |
+| `robot/core/input_handler.py` | KEY_MAP, KeyboardInput, XboxInput |
+| `robot/arm/admittance/main.py` | apply_rotation_delta(), 제어 루프 |
+| `robot/arm/admittance/admittance_layer.py` | AdmittanceLayer (F/T→변위 통합) |
+| `robot/arm/admittance/safety_monitor.py` | SafetyMonitor (4단계 안전) |
+| `robot/arm/admittance/teleop_config.py` | TeleopConfig (YAML 로더) |

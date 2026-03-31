@@ -4,7 +4,7 @@
 Tests the coordinate transform computation with known inputs (NO SteamVR required).
 Can be run on any machine.
 
-Usage: python3 -m vive.tests.test_step4_calibration
+Usage: python3 -m operator.arm.tests.test_step4_calibration
 """
 
 import math
@@ -12,7 +12,7 @@ import sys
 
 import numpy as np
 
-from teleop_dev.operator.arm.calibrate import (
+from operator.arm.calibrate import (
     compute_calibration,
     transform_pose,
     _rot_to_quat,

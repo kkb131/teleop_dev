@@ -5,12 +5,12 @@ from typing import Dict, List
 
 import numpy as np
 
-from teleop_dev.robot.config import (
+from robot.config import (
     MAX_JOINT_ACCEL_RAD_S2,
     MAX_JOINT_VEL_RAD_S,
     SERVOJ_DT,
 )
-from teleop_dev.robot.core.robot_backend import RobotBackend
+from robot.core.robot_backend import RobotBackend
 
 
 def resample_trajectory(

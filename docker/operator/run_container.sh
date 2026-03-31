@@ -5,7 +5,7 @@
 # Usage:
 #   ./run_container.sh
 #   ./run_container.sh --join
-#   ./run_container.sh python3 -m teleop_dev.operator.arm.keyboard_sender --target-ip 10.0.0.5
+#   ./run_container.sh python3 -m operator.arm.keyboard_sender --target-ip 10.0.0.5
 # =============================================================================
 
 set -euo pipefail

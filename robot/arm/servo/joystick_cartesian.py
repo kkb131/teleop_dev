@@ -20,8 +20,8 @@ Xbox controller mapping:
   Start button      : Quit
 
 Usage:
-  python3 -m standalone.servo.joystick_cartesian --mode sim
-  python3 -m standalone.servo.joystick_cartesian --mode rtde --robot-ip 192.168.0.2
+  python3 -m robot.arm.servo.joystick_cartesian --mode sim
+  python3 -m robot.arm.servo.joystick_cartesian --mode rtde --robot-ip 192.168.0.2
 """
 
 import argparse
@@ -34,13 +34,13 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Joy
 
-from teleop_dev.robot.config import (
+from robot.config import (
     DEFAULT_MODE,
     DEFAULT_ROBOT_IP,
     SERVO_RATE_HZ,
 )
-from teleop_dev.robot.core.robot_backend import create_backend
-from teleop_dev.robot.core.kinematics import PinocchioIK
+from robot.core.robot_backend import create_backend
+from robot.core.kinematics import PinocchioIK
 
 # Frames
 BASE_FRAME = 'base_link'

@@ -8,9 +8,9 @@ Requirements: numpy, pyyaml, pynput
     pip install numpy pyyaml pynput
 
 Usage:
-    python3 -m manus.manus_sender --target-ip <ROBOT_PC_IP>
-    python3 -m manus.manus_sender --config manus/config/default.yaml
-    python3 -m manus.manus_sender --target-ip 10.0.0.5 --hand both
+    python3 -m operator.hand.manus_sender --target-ip <ROBOT_PC_IP>
+    python3 -m operator.hand.manus_sender --config operator/hand/config/default.yaml
+    python3 -m operator.hand.manus_sender --target-ip 10.0.0.5 --hand both
 """
 
 import argparse
@@ -19,8 +19,8 @@ import socket
 import threading
 import time
 
-from teleop_dev.operator.hand.manus_config import ManusConfig
-from teleop_dev.operator.hand.manus_reader import ManusReader
+from operator.hand.manus_config import ManusConfig
+from operator.hand.manus_reader import ManusReader
 
 try:
     from pynput import keyboard
@@ -141,7 +141,7 @@ def _build_null_packet(hand_side: str, buttons: dict) -> dict:
 def main():
     parser = argparse.ArgumentParser(description="UDP Manus glove data sender")
     parser.add_argument("--config", default=None,
-                        help="YAML config file (default: manus/config/default.yaml)")
+                        help="YAML config file (default: operator/hand/config/default.yaml)")
     parser.add_argument("--target-ip", default=None,
                         help="Robot PC IP (overrides config)")
     parser.add_argument("--port", type=int, default=None,

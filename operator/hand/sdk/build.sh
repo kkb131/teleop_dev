@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build SDKClient_Linux with --stream-json support
-# Usage: bash manus/sdk/build.sh
+# Usage: bash operator/hand/sdk/build.sh
 
 set -euo pipefail
 

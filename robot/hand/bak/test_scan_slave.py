@@ -4,8 +4,8 @@
 Tries read_input_registers on slave IDs 0-247 and reports which ones respond.
 
 Usage:
-    python3 -m tesollo.tests.test_scan_slave --ip 169.254.186.72
-    python3 -m tesollo.tests.test_scan_slave --ip 169.254.186.72 --start 0 --end 10
+    python3 -m robot.hand.tests.test_scan_slave --ip 169.254.186.72
+    python3 -m robot.hand.tests.test_scan_slave --ip 169.254.186.72 --start 0 --end 10
 """
 
 import argparse

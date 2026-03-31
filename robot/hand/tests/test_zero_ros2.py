@@ -5,8 +5,8 @@ Requires dg5f_driver running:
     ros2 launch dg5f_driver dg5f_right_pid_all_controller.launch.py delto_ip:=169.254.186.72
 
 Usage:
-    python3 -m teleop_dev.robot.hand.tests.test_zero_ros2
-    python3 -m teleop_dev.robot.hand.tests.test_zero_ros2 --hand left
+    python3 -m robot.hand.tests.test_zero_ros2
+    python3 -m robot.hand.tests.test_zero_ros2 --hand left
 """
 
 import argparse

@@ -52,16 +52,16 @@ Input → ExpFilter → Workspace Clamp     RTDE 레지스터 읽기
 cd /workspaces/tamp_ws/src/tamp_dev
 
 # Sim 모드 (mock hardware — 위치 제어 fallback, 토크 없음)
-python3 -m standalone.teleop_impedance.main --mode sim --input keyboard
+python3 -m robot.arm.impedance.main --mode sim --input keyboard
 
 # 실제 로봇 (임피던스 토크 제어)
-python3 -m standalone.teleop_impedance.main --mode rtde --input keyboard --robot-ip 192.168.0.2
+python3 -m robot.arm.impedance.main --mode rtde --input keyboard --robot-ip 192.168.0.2
 
 # Xbox 컨트롤러 + CSV 로깅
-python3 -m standalone.teleop_impedance.main --mode rtde --input xbox --robot-ip 192.168.0.2 --log
+python3 -m robot.arm.impedance.main --mode rtde --input xbox --robot-ip 192.168.0.2 --log
 
 # 커스텀 설정 파일
-python3 -m standalone.teleop_impedance.main --config path/to/config.yaml
+python3 -m robot.arm.impedance.main --config path/to/config.yaml
 ```
 
 ### Sim 모드 사전 준비
@@ -346,7 +346,7 @@ impedance:
 ## 모듈 구조
 
 ```
-standalone/teleop_impedance/
+robot/arm/impedance/
 ├── __init__.py               # 패키지 초기화
 ├── main.py                   # ImpedanceTeleopController — 메인 제어 루프
 ├── impedance_config.py       # ImpedanceConfig — YAML 설정 로더
@@ -361,7 +361,7 @@ standalone/teleop_impedance/
     └── user_guide.md         # 이 문서
 ```
 
-### 공유 모듈 (standalone/core/)
+### 공유 모듈 (robot/core/)
 
 | 모듈 | 용도 |
 |------|------|
@@ -370,7 +370,7 @@ standalone/teleop_impedance/
 | `core/pink_ik.py` | QP 기반 task-level IK |
 | `core/robot_backend.py` | RobotBackend ABC + `create_backend()` |
 | `core/controller_utils.py` | ControllerSwitcher (sim mode mock hw) |
-| `standalone/config.py` | URDF_PATH, JOINT_NAMES, 토크 상수 |
+| `robot/config.py` | URDF_PATH, JOINT_NAMES, 토크 상수 |
 
 
 ## 터미널 상태 표시
@@ -409,7 +409,7 @@ timestamp,ee_x,ee_y,ee_z,ee_roll,ee_pitch,ee_yaw,j1,j2,j3,j4,j5,j6,ee_vel,safety
 1. **PolyScope 버전 확인**: 설정 → 정보에서 5.23.0 이상인지 확인
 2. **SOFT 프리셋으로 시작** (기본값)
    ```bash
-   python3 -m standalone.teleop_impedance.main --mode rtde --robot-ip 192.168.0.2
+   python3 -m robot.arm.impedance.main --mode rtde --robot-ip 192.168.0.2
    ```
 3. **로봇 정지 상태 확인**: 시작 후 URScript 업로드 완료까지 ~0.5초 대기
 4. **키보드로 소량 이동**: W/S 키로 X축 이동 확인

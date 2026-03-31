@@ -18,7 +18,7 @@ Scaling:
   - Current:  register_value * CUR_SCALE (0.001 A)
 
 Usage:
-    from teleop_dev.robot.hand.dg5f_client import DG5FClient
+    from robot.hand.dg5f_client import DG5FClient
 
     client = DG5FClient(ip="169.254.186.72")
     client.connect()

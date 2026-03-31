@@ -2,9 +2,9 @@
 """Move UR10e to a specified joint pose via ur_rtde moveJ.
 
 Usage:
-    python3 -m vive.move_to_pose --robot-ip 192.168.0.2
-    python3 -m vive.move_to_pose --robot-ip 192.168.0.2 --speed 0.5 --accel 0.3
-    python3 -m vive.move_to_pose --robot-ip 192.168.0.2 --joints 2.40 -1.18 2.06 -0.88 2.24 0.15
+    python3 -m operator.arm.move_to_pose --robot-ip 192.168.0.2
+    python3 -m operator.arm.move_to_pose --robot-ip 192.168.0.2 --speed 0.5 --accel 0.3
+    python3 -m operator.arm.move_to_pose --robot-ip 192.168.0.2 --joints 2.40 -1.18 2.06 -0.88 2.24 0.15
 """
 
 import argparse

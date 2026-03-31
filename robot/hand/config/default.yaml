@@ -4,8 +4,8 @@
 #   ros2 launch dg5f_driver dg5f_right_driver.launch.py delto_ip:=169.254.186.72
 #
 # Usage:
-#   python3 -m teleop_dev.robot.hand.receiver --hand right
-#   python3 -m teleop_dev.robot.hand.receiver --dry-run
+#   python3 -m robot.hand.receiver --hand right
+#   python3 -m robot.hand.receiver --dry-run
 
 network:
   listen_port: 9872          # UDP port for Manus packets

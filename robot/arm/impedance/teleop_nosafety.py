@@ -8,9 +8,9 @@ No TorqueSafetyMonitor, no workspace clamping, no e-stop, no timeout.
 Torque saturation (clip to TORQUE_LIMITS) is always applied.
 
 Usage:
-  python3 -m standalone.teleop_impedance.teleop_nosafety --robot-ip 192.168.0.2
-  python3 -m standalone.teleop_impedance.teleop_nosafety --robot-ip 192.168.0.2 --preset MEDIUM
-  python3 -m standalone.teleop_impedance.teleop_nosafety --robot-ip 192.168.0.2 --input xbox
+  python3 -m robot.arm.impedance.teleop_nosafety --robot-ip 192.168.0.2
+  python3 -m robot.arm.impedance.teleop_nosafety --robot-ip 192.168.0.2 --preset MEDIUM
+  python3 -m robot.arm.impedance.teleop_nosafety --robot-ip 192.168.0.2 --input xbox
 """
 
 import argparse
@@ -21,15 +21,15 @@ import time
 import numpy as np
 import pinocchio as pin
 
-from teleop_dev.robot.core.exp_filter import ExpFilter
-from teleop_dev.robot.core.input_handler import create_input
-from teleop_dev.robot.core.pink_ik import PinkIK
-from teleop_dev.robot.arm.impedance.impedance_config import ImpedanceConfig
-from teleop_dev.robot.arm.impedance.impedance_gains import (
+from robot.core.exp_filter import ExpFilter
+from robot.core.input_handler import create_input
+from robot.core.pink_ik import PinkIK
+from robot.arm.impedance.impedance_config import ImpedanceConfig
+from robot.arm.impedance.impedance_gains import (
     ImpedanceController,
     IMPEDANCE_PRESETS,
 )
-from teleop_dev.robot.arm.impedance.urscript_manager import URScriptManager, TORQUE_LIMITS
+from robot.arm.impedance.urscript_manager import URScriptManager, TORQUE_LIMITS
 
 
 HELP_KEYBOARD = """\

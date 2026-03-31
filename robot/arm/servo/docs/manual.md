@@ -1,6 +1,6 @@
 # servo/ 학습 매뉴얼 — 기본 텔레옵 (난이도 ★)
 
-> **위치**: `standalone/servo/`
+> **위치**: `robot/arm/servo/`
 > **의존 core 모듈**: `robot_backend`, `kinematics` (DLS IK)
 > **학습 선수 지식**: [core/ 매뉴얼](../../core/docs/manual.md) §2 (로봇 통신), §4.1 (DLS IK)
 

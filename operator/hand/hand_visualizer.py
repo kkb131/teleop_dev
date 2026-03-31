@@ -10,13 +10,13 @@ bar charts, and wrist pose info. Supports three input modes:
 
 Usage:
     # Mock data (no hardware needed):
-    python3 -m manus.hand_visualizer
+    python3 -m operator.hand.hand_visualizer
 
     # Real glove:
-    python3 -m manus.hand_visualizer --sdk --sdk-path manus/sdk/SDKClient_Linux/SDKClient_Linux.out
+    python3 -m operator.hand.hand_visualizer --sdk --sdk-path operator/hand/sdk/SDKClient_Linux/SDKClient_Linux.out
 
     # UDP receiver (run manus_sender on another terminal):
-    python3 -m manus.hand_visualizer --udp --port 9872
+    python3 -m operator.hand.hand_visualizer --udp --port 9872
 """
 
 import argparse
@@ -37,7 +37,7 @@ except ImportError:
     print("[ERROR] pygame not installed. Run: pip install pygame")
     sys.exit(1)
 
-from teleop_dev.operator.hand.manus_reader import (
+from operator.hand.manus_reader import (
     HandData, FINGER_NAMES, JOINT_NAMES_PER_FINGER,
     NUM_JOINTS, NUM_FINGERS, JOINTS_PER_FINGER,
 )
@@ -208,7 +208,7 @@ class SDKDataSource:
     """Reads from Manus glove via ManusReader."""
 
     def __init__(self, sdk_path: str, hand_side: str = "right"):
-        from teleop_dev.operator.hand.manus_reader import ManusReader
+        from operator.hand.manus_reader import ManusReader
         self._reader = ManusReader(sdk_bin_path=sdk_path, hand_side=hand_side)
         self._reader.connect()
         print(f"[SDK] Connected to Manus glove ({hand_side})")
@@ -531,7 +531,7 @@ def main():
 
     parser.add_argument("--hand", default="right", choices=["left", "right"],
                         help="Hand side (default: right)")
-    parser.add_argument("--sdk-path", default="manus/sdk/SDKClient_Linux/SDKClient_Linux.out",
+    parser.add_argument("--sdk-path", default="operator/hand/sdk/SDKClient_Linux/SDKClient_Linux.out",
                         help="Path to SDKClient_Linux.out (with --sdk)")
     parser.add_argument("--port", type=int, default=9872,
                         help="UDP port (with --udp, default: 9872)")

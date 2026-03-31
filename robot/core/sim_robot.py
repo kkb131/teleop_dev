@@ -7,8 +7,8 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
 
-from teleop_dev.robot.config import JOINT_NAMES
-from teleop_dev.robot.core.robot_backend import RobotBackend
+from robot.config import JOINT_NAMES
+from robot.core.robot_backend import RobotBackend
 
 
 class _SimNode(Node):

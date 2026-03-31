@@ -8,7 +8,7 @@ Requirements:
     - Step 2 passed (glove connected)
     - Gloves worn on hand(s)
 
-Usage: python3 -m manus.tests.test_step3_stream [--duration 5] [--hz 60]
+Usage: python3 -m operator.hand.tests.test_step3_stream [--duration 5] [--hz 60]
 """
 
 import argparse
@@ -17,7 +17,7 @@ import time
 
 import numpy as np
 
-from teleop_dev.operator.hand.manus_reader import (
+from operator.hand.manus_reader import (
     ManusReader, HandData,
     FINGER_NAMES, JOINT_NAMES_PER_FINGER,
     NUM_JOINTS, NUM_FINGERS, JOINTS_PER_FINGER,
@@ -26,7 +26,7 @@ from teleop_dev.operator.hand.manus_reader import (
 
 def main():
     parser = argparse.ArgumentParser(description="Step 3: Streaming test")
-    parser.add_argument("--sdk-path", default="manus/sdk/SDKClient_Linux/SDKClient_Linux.out",
+    parser.add_argument("--sdk-path", default="operator/hand/sdk/SDKClient_Linux/SDKClient_Linux.out",
                         help="Path to SDKClient_Linux.out")
     parser.add_argument("--hand", default="right",
                         choices=["left", "right"],

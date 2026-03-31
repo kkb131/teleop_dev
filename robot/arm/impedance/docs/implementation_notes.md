@@ -1,7 +1,7 @@
 # UR10e 임피던스 제어 — 구현 노트 및 디버깅 기록
 
 > **상태**: `test_impedance_bare` 실제 로봇 동작 확인 완료 (2026-03)
-> **위치**: `standalone/teleop_impedance/`
+> **위치**: `robot/arm/impedance/`
 > **관련 문서**: [manual.md](manual.md) (원래 설계), [user_guide.md](user_guide.md) (사용법)
 
 ---
@@ -110,7 +110,7 @@ Python (125Hz)                              UR Controller (500Hz)
 
 ```bash
 cd /workspaces/tamp_ws/src/tamp_dev
-python3 -m standalone.teleop_impedance.test_impedance_bare --robot-ip 192.168.0.2 --preset SOFT
+python3 -m robot.arm.impedance.test_impedance_bare --robot-ip 192.168.0.2 --preset SOFT
 ```
 
 로봇이 현재 위치를 유지. 손으로 밀면 저항 후 원위치 복귀.
@@ -119,10 +119,10 @@ python3 -m standalone.teleop_impedance.test_impedance_bare --robot-ip 192.168.0.
 
 ```bash
 # 실제 로봇
-python3 -m standalone.teleop_impedance.main --mode rtde --input keyboard --robot-ip 192.168.0.2
+python3 -m robot.arm.impedance.main --mode rtde --input keyboard --robot-ip 192.168.0.2
 
 # 시뮬레이션 (위치 제어 fallback)
-python3 -m standalone.teleop_impedance.main --mode sim --input keyboard
+python3 -m robot.arm.impedance.main --mode sim --input keyboard
 ```
 
 ### 게인 프리셋
@@ -276,7 +276,7 @@ UR Secondary Interface (port 30002)로 업로드하는 URScript에 적용되는 
 ### test_impedance_bare.py — 최소 임피던스 테스트
 
 ```bash
-python3 -m standalone.teleop_impedance.test_impedance_bare --robot-ip 192.168.0.2 --preset SOFT
+python3 -m robot.arm.impedance.test_impedance_bare --robot-ip 192.168.0.2 --preset SOFT
 ```
 
 IK, 입력, 안전 시스템 없이 순수 PD position-hold만 테스트.
@@ -285,7 +285,7 @@ IK, 입력, 안전 시스템 없이 순수 PD position-hold만 테스트.
 ### test_torque_diag.py — 5단계 컴포넌트 테스트
 
 ```bash
-python3 -m standalone.teleop_impedance.test_torque_diag --robot-ip 192.168.0.2 --test ALL
+python3 -m robot.arm.impedance.test_torque_diag --robot-ip 192.168.0.2 --test ALL
 ```
 
 | 테스트 | 검증 내용 | RTDE 필요 |
@@ -301,7 +301,7 @@ python3 -m standalone.teleop_impedance.test_torque_diag --robot-ip 192.168.0.2 -
 ### test_script_upload.py — 스크립트 내용 격리 테스트
 
 ```bash
-python3 -m standalone.teleop_impedance.test_script_upload --robot-ip 192.168.0.2
+python3 -m robot.arm.impedance.test_script_upload --robot-ip 192.168.0.2
 ```
 
 RTDE 연결 없이 순수 TCP 소켓으로 `impedance_pd.script`를 업로드.
@@ -311,7 +311,7 @@ RTDE 연결 없이 순수 TCP 소켓으로 `impedance_pd.script`를 업로드.
 ### test_urscript_upload.py — freedrive/torque 기본 테스트
 
 ```bash
-python3 -m standalone.teleop_impedance.test_urscript_upload --robot-ip 192.168.0.2 --test torque
+python3 -m robot.arm.impedance.test_urscript_upload --robot-ip 192.168.0.2 --test torque
 ```
 
 인라인 최소 스크립트로 `direct_torque()` API 동작 확인.

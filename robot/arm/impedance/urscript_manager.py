@@ -31,7 +31,7 @@ try:
 except ImportError:
     RTDE_AVAILABLE = False
 
-from teleop_dev.robot.config import URDF_PATH
+from robot.config import URDF_PATH
 
 _SCRIPT_PATH = Path(__file__).parent / "scripts" / "impedance_pd.script"
 _N_JOINTS = 6

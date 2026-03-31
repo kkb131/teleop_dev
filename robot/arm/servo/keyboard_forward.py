@@ -17,8 +17,8 @@ Key mappings:
   Esc / q : Quit
 
 Usage:
-  python3 -m standalone.servo.keyboard_forward --mode sim
-  python3 -m standalone.servo.keyboard_forward --mode rtde --robot-ip 192.168.0.2
+  python3 -m robot.arm.servo.keyboard_forward --mode sim
+  python3 -m robot.arm.servo.keyboard_forward --mode rtde --robot-ip 192.168.0.2
 """
 
 import argparse
@@ -30,13 +30,13 @@ import termios
 import time
 import tty
 
-from teleop_dev.robot.config import (
+from robot.config import (
     DEFAULT_MODE,
     DEFAULT_ROBOT_IP,
     JOINT_NAMES,
     SERVO_RATE_HZ,
 )
-from teleop_dev.robot.core.robot_backend import create_backend
+from robot.core.robot_backend import create_backend
 
 # Step sizes (radians)
 STEP_SIZES = [0.001, 0.005, 0.01, 0.02, 0.05, 0.1]

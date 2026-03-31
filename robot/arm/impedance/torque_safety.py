@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from teleop_dev.robot.arm.impedance.impedance_config import SafetyConfig
+from robot.arm.impedance.impedance_config import SafetyConfig
 
 
 @dataclass

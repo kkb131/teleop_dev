@@ -7,10 +7,10 @@ Pipeline: Input -> ExpFilter -> Workspace Clamp -> Pink IK -> q_desired
 
 Usage:
   # Sim mode (mock hardware — position fallback, no torque)
-  python3 -m standalone.teleop_impedance.main --mode sim --input keyboard
+  python3 -m robot.arm.impedance.main --mode sim --input keyboard
 
   # Real robot (impedance torque control)
-  python3 -m standalone.teleop_impedance.main --mode rtde --input keyboard --robot-ip 192.168.0.2
+  python3 -m robot.arm.impedance.main --mode rtde --input keyboard --robot-ip 192.168.0.2
 """
 
 import argparse
@@ -25,18 +25,18 @@ from typing import Optional
 import numpy as np
 import pinocchio as pin
 
-from teleop_dev.robot.config import URDF_PATH
-from teleop_dev.robot.core.robot_backend import create_backend, RobotBackend
-from teleop_dev.robot.core.exp_filter import ExpFilter
-from teleop_dev.robot.core.pink_ik import PinkIK
-from teleop_dev.robot.core.input_handler import create_input, InputHandler
-from teleop_dev.robot.arm.impedance.impedance_config import ImpedanceConfig
-from teleop_dev.robot.arm.impedance.impedance_gains import (
+from robot.config import URDF_PATH
+from robot.core.robot_backend import create_backend, RobotBackend
+from robot.core.exp_filter import ExpFilter
+from robot.core.pink_ik import PinkIK
+from robot.core.input_handler import create_input, InputHandler
+from robot.arm.impedance.impedance_config import ImpedanceConfig
+from robot.arm.impedance.impedance_gains import (
     ImpedanceController,
     IMPEDANCE_PRESETS,
 )
-from teleop_dev.robot.arm.impedance.torque_safety import TorqueSafetyMonitor
-from teleop_dev.robot.arm.impedance.urscript_manager import TORQUE_LIMITS
+from robot.arm.impedance.torque_safety import TorqueSafetyMonitor
+from robot.arm.impedance.urscript_manager import TORQUE_LIMITS
 
 
 HELP_KEYBOARD = """\
@@ -148,7 +148,7 @@ class ImpedanceTeleopController:
         try:
             import rclpy
             from rclpy.node import Node
-            from teleop_dev.robot.core.controller_utils import ControllerSwitcher
+            from robot.core.controller_utils import ControllerSwitcher
         except ImportError:
             return
 
@@ -291,7 +291,7 @@ class ImpedanceTeleopController:
 
     def _run_impedance(self, cfg: ImpedanceConfig, dt: float):
         """Real robot: Python PD torque via custom URScript + RTDE registers."""
-        from teleop_dev.robot.arm.impedance.urscript_manager import URScriptManager
+        from robot.arm.impedance.urscript_manager import URScriptManager
 
         mgr = URScriptManager(cfg.robot.ip, frequency=cfg.frequency)
         mgr.connect()
@@ -311,7 +311,7 @@ class ImpedanceTeleopController:
         self.safety = TorqueSafetyMonitor(cfg.safety)
 
         # Set pose_provider for unified input
-        from teleop_dev.robot.core.input_handler import UnifiedNetworkInput
+        from robot.core.input_handler import UnifiedNetworkInput
         if isinstance(self.input_handler, UnifiedNetworkInput):
             self.input_handler._pose_provider = lambda: self.ik.get_ee_pose(
                 np.array(mgr.get_joint_positions())
@@ -360,7 +360,7 @@ class ImpedanceTeleopController:
             self.safety = TorqueSafetyMonitor(cfg.safety)
 
             # Set pose_provider for unified input
-            from teleop_dev.robot.core.input_handler import UnifiedNetworkInput
+            from robot.core.input_handler import UnifiedNetworkInput
             if isinstance(self.input_handler, UnifiedNetworkInput):
                 self.input_handler._pose_provider = lambda: self.ik.get_ee_pose(
                     np.array(backend.get_joint_positions())

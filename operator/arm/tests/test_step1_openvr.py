@@ -5,7 +5,7 @@ Verifies that SteamVR is running and can be initialized.
 Lists all connected tracker devices.
 
 Requirements: SteamVR running, openvr installed
-Usage: python3 -m vive.tests.test_step1_openvr
+Usage: python3 -m operator.arm.tests.test_step1_openvr
 """
 
 import sys

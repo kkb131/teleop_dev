@@ -9,15 +9,15 @@ BaseFrameFTSource handles TCP→base conversion by negating X,Y components.
 
 import numpy as np
 
-from teleop_dev.robot.core.compliant_control import (
+from robot.core.compliant_control import (
     AdmittanceController,
     ComplianceParams,
     COMPLIANCE_PRESETS,
     DEFAULT_PRESET,
 )
-from teleop_dev.robot.core.ft_source import FTSource, NullFTSource, RTDEFTSource, BaseFrameFTSource
-from teleop_dev.robot.core.robot_backend import RobotBackend
-from teleop_dev.robot.arm.admittance.teleop_config import AdmittanceConfig
+from robot.core.ft_source import FTSource, NullFTSource, RTDEFTSource, BaseFrameFTSource
+from robot.core.robot_backend import RobotBackend
+from robot.arm.admittance.teleop_config import AdmittanceConfig
 
 
 class AdmittanceLayer:

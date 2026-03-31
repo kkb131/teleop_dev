@@ -7,7 +7,7 @@ all ctypes/callback issues by delegating SDK interaction to the
 proven C++ example code.
 
 Usage:
-    python3 -m manus.manus_reader [--hand right] [--sdk-bin manus/sdk/SDKClient_Linux/SDKClient_Linux.out]
+    python3 -m operator.hand.manus_reader [--hand right] [--sdk-bin operator/hand/sdk/SDKClient_Linux/SDKClient_Linux.out]
 """
 
 import argparse
@@ -43,7 +43,7 @@ NUM_FINGERS = 5
 JOINTS_PER_FINGER = 4
 NUM_JOINTS = NUM_FINGERS * JOINTS_PER_FINGER  # 20
 
-DEFAULT_SDK_BIN = "manus/sdk/SDKClient_Linux/SDKClient_Linux.out"
+DEFAULT_SDK_BIN = "operator/hand/sdk/SDKClient_Linux/SDKClient_Linux.out"
 
 # Strip ANSI escape sequences (e.g. \x1b[0;1H cursor moves from C++ binary)
 _ANSI_RE = re.compile(r'\x1b\[[0-9;]*[A-Za-z]')

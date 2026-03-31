@@ -1,7 +1,7 @@
 # core/ 학습 매뉴얼 — 공유 인프라
 
 > **난이도**: 기초 (모든 기능 모듈의 선수 지식)
-> **위치**: `standalone/core/`
+> **위치**: `robot/core/`
 > **목적**: 2개 이상의 기능 모듈이 공유하는 인프라 코드
 
 ---
@@ -109,10 +109,10 @@ class RobotBackend(ABC):
 # robot_backend.py:51-59
 def create_backend(mode: str, **kwargs) -> RobotBackend:
     if mode == "rtde":
-        from standalone.core.ur_robot import RTDEBackend
+        from robot.core.ur_robot import RTDEBackend
         return RTDEBackend(robot_ip=kwargs["robot_ip"])
     elif mode == "sim":
-        from standalone.core.sim_robot import SimBackend
+        from robot.core.sim_robot import SimBackend
         return SimBackend(**{k: v for k, v in kwargs.items() if k != "robot_ip"})
     raise ValueError(f"Unknown mode: {mode}")
 ```

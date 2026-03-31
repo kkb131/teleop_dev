@@ -12,8 +12,8 @@ Computes rotation R and translation t such that:
 Saves calibration to JSON file for use by ViveNetworkInput.
 
 Usage:
-    python3 -m vive.calibrate --output calibration.json
-    python3 -m vive.calibrate --output calibration.json --tracker-serial LHR-xxx
+    python3 -m operator.arm.calibrate --output calibration.json
+    python3 -m operator.arm.calibrate --output calibration.json --tracker-serial LHR-xxx
 """
 
 import argparse
@@ -23,7 +23,7 @@ from datetime import datetime
 
 import numpy as np
 
-from teleop_dev.operator.arm.vive_tracker import ViveTracker
+from operator.arm.vive_tracker import ViveTracker
 
 
 def _collect_point(tracker: ViveTracker, label: str,

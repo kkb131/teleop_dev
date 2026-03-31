@@ -11,8 +11,8 @@ Procedure:
     3. Save calibration JSON
 
 Usage:
-    python3 -m manus.calibrate --sdk-path manus/sdk/SDKClient_Linux/SDKClient_Linux.out
-    python3 -m manus.calibrate --output calibration_right.json --hand right
+    python3 -m operator.hand.calibrate --sdk-path operator/hand/sdk/SDKClient_Linux/SDKClient_Linux.out
+    python3 -m operator.hand.calibrate --output calibration_right.json --hand right
 """
 
 import argparse
@@ -23,7 +23,7 @@ from pathlib import Path
 
 import numpy as np
 
-from teleop_dev.operator.hand.manus_reader import (
+from operator.hand.manus_reader import (
     ManusReader, HandData,
     FINGER_NAMES, JOINT_NAMES_PER_FINGER,
     NUM_JOINTS, NUM_FINGERS, JOINTS_PER_FINGER,
@@ -65,7 +65,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Manus glove finger ROM calibration"
     )
-    parser.add_argument("--sdk-path", default="manus/sdk/SDKClient_Linux/SDKClient_Linux.out",
+    parser.add_argument("--sdk-path", default="operator/hand/sdk/SDKClient_Linux/SDKClient_Linux.out",
                         help="Path to SDKClient_Linux.out")
     parser.add_argument("--hand", default="right",
                         choices=["left", "right"],

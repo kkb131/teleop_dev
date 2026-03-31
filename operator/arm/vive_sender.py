@@ -12,9 +12,9 @@ Requirements: openvr, numpy, pynput, pyyaml
     pip install openvr numpy pynput pyyaml
 
 Usage:
-    python3 -m vive.vive_sender --target-ip <ROBOT_PC_IP>
-    python3 -m vive.vive_sender --config vive/config/default.yaml
-    python3 -m vive.vive_sender --config vive/config/default.yaml --target-ip 10.0.0.5
+    python3 -m operator.arm.vive_sender --target-ip <ROBOT_PC_IP>
+    python3 -m operator.arm.vive_sender --config operator/arm/config/default.yaml
+    python3 -m operator.arm.vive_sender --config operator/arm/config/default.yaml --target-ip 10.0.0.5
 """
 
 import argparse
@@ -22,16 +22,16 @@ import threading
 
 import numpy as np
 
-from teleop_dev.operator.arm.calibrate import load_calibration, transform_pose
-from teleop_dev.operator.arm.sender_base import (
+from operator.arm.calibrate import load_calibration, transform_pose
+from operator.arm.sender_base import (
     InputResult,
     TeleopSenderBase,
     _quat_multiply,
 )
-from teleop_dev.operator.arm.vive_config import ViveConfig
-from teleop_dev.operator.arm.vive_tracker import ViveTracker
+from operator.arm.vive_config import ViveConfig
+from operator.arm.vive_tracker import ViveTracker
 
-from teleop_dev.protocol.arm_protocol import ButtonState
+from protocol.arm_protocol import ButtonState
 
 try:
     from pynput import keyboard
@@ -236,7 +236,7 @@ def _quat_to_axis_angle(q: np.ndarray) -> np.ndarray:
 def main():
     parser = argparse.ArgumentParser(description="UDP Vive Tracker sender (unified protocol)")
     parser.add_argument("--config", default=None,
-                        help="YAML config file (default: vive/config/default.yaml)")
+                        help="YAML config file (default: operator/arm/config/default.yaml)")
     parser.add_argument("--target-ip", default=None,
                         help="Robot PC IP (overrides config)")
     parser.add_argument("--port", type=int, default=None,

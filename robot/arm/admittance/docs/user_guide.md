@@ -102,7 +102,7 @@ ros2 launch ur_robot_driver ur10e.launch.py use_fake_hardware:=true robot_ip:=0.
 
 ```bash
 cd /workspaces/tamp_ws/src/tamp_dev
-python3 -m standalone.teleop_admittance.main --mode sim --input keyboard
+python3 -m robot.arm.admittance.main --mode sim --input keyboard
 ```
 
 아래와 같은 출력이 나타나면 성공입니다:
@@ -184,7 +184,7 @@ python3 -m standalone.teleop_admittance.main --mode sim --input keyboard
 
 ```bash
 # Xbox 컨트롤러로 실행
-python3 -m standalone.teleop_admittance.main --mode sim --input xbox
+python3 -m robot.arm.admittance.main --mode sim --input xbox
 ```
 
 ### 스틱 / 트리거
@@ -290,13 +290,13 @@ sim 모드에서 충분히 연습한 후, 실제 로봇에 연결하세요.
 cd /workspaces/tamp_ws/src/tamp_dev
 
 # 기본 IP (192.168.0.2)
-python3 -m standalone.teleop_admittance.main --mode rtde --input keyboard
+python3 -m robot.arm.admittance.main --mode rtde --input keyboard
 
 # 다른 IP
-python3 -m standalone.teleop_admittance.main --mode rtde --input keyboard --robot-ip 192.168.0.100
+python3 -m robot.arm.admittance.main --mode rtde --input keyboard --robot-ip 192.168.0.100
 
 # Xbox 컨트롤러
-python3 -m standalone.teleop_admittance.main --mode rtde --input xbox --robot-ip 192.168.0.2
+python3 -m robot.arm.admittance.main --mode rtde --input xbox --robot-ip 192.168.0.2
 ```
 
 ### 첫 연결 시 권장 순서
@@ -315,7 +315,7 @@ python3 -m standalone.teleop_admittance.main --mode rtde --input xbox --robot-ip
 동작을 기록하고 싶다면 `--log` 옵션을 추가합니다:
 
 ```bash
-python3 -m standalone.teleop_admittance.main --mode rtde --input keyboard --log
+python3 -m robot.arm.admittance.main --mode rtde --input keyboard --log
 ```
 
 `teleop_log_YYYYMMDD_HHMMSS.csv` 파일이 생성되며, EE 위치/RPY/관절 각도/속도/안전 상태가 기록됩니다.
@@ -385,23 +385,23 @@ pip install "numpy<2"
 cd /workspaces/tamp_ws/src/tamp_dev
 
 # sim + 키보드 (기본, 처음 시작할 때)
-python3 -m standalone.teleop_admittance.main --mode sim --input keyboard
+python3 -m robot.arm.admittance.main --mode sim --input keyboard
 
 # sim + Xbox
-python3 -m standalone.teleop_admittance.main --mode sim --input xbox
+python3 -m robot.arm.admittance.main --mode sim --input xbox
 
 # 실제 로봇 + 키보드
-python3 -m standalone.teleop_admittance.main --mode rtde --input keyboard --robot-ip 192.168.0.2
+python3 -m robot.arm.admittance.main --mode rtde --input keyboard --robot-ip 192.168.0.2
 
 # 실제 로봇 + Xbox + 로깅
-python3 -m standalone.teleop_admittance.main --mode rtde --input xbox --robot-ip 192.168.0.2 --log
+python3 -m robot.arm.admittance.main --mode rtde --input xbox --robot-ip 192.168.0.2 --log
 
 # 커스텀 설정 파일 사용
-python3 -m standalone.teleop_admittance.main --config standalone/teleop_admittance/config/my_config.yaml
+python3 -m robot.arm.admittance.main --config robot/arm/admittance/config/my_config.yaml
 
 # 안전 시스템 없이 테스트 (개발용)
-python3 -m standalone.teleop_admittance.teleop_nosafety --mode sim --input keyboard
+python3 -m robot.arm.admittance.teleop_nosafety --mode sim --input keyboard
 
 # 순수 어드미턴스 테스트 (키보드 입력 없이, 외력만으로 제어)
-python3 -m standalone.teleop_admittance.test_admittance --robot-ip 192.168.0.2
+python3 -m robot.arm.admittance.test_admittance --robot-ip 192.168.0.2
 ```

@@ -173,29 +173,29 @@ teleop_dev/
 
 ```bash
 # Vive 트래커 → 팔 teleop
-python3 -m teleop_dev.operator.arm.vive_sender --target-ip 10.0.0.5
+python3 -m operator.arm.vive_sender --target-ip 10.0.0.5
 
 # 키보드 → 팔 teleop
-python3 -m teleop_dev.operator.arm.keyboard_sender --target-ip 10.0.0.5
+python3 -m operator.arm.keyboard_sender --target-ip 10.0.0.5
 
 # Manus 글러브 → 손 teleop
-python3 -m teleop_dev.operator.hand.manus_sender --target-ip 10.0.0.5
+python3 -m operator.hand.manus_sender --target-ip 10.0.0.5
 ```
 
 ### 로봇 PC (AGX Orin)
 
 ```bash
 # 팔: 어드미턴스 모드 (네트워크 입력)
-python3 -m teleop_dev.robot.arm.admittance.main --mode rtde --input unified --robot-ip 192.168.0.2
+python3 -m robot.arm.admittance.main --mode rtde --input unified --robot-ip 192.168.0.2
 
 # 팔: 임피던스 모드 (네트워크 입력, PolyScope 5.23.0+ 필수)
-python3 -m teleop_dev.robot.arm.impedance.main --mode rtde --input unified --robot-ip 192.168.0.2
+python3 -m robot.arm.impedance.main --mode rtde --input unified --robot-ip 192.168.0.2
 
 # 팔: 단순 servo (로컬 키보드, 네트워크 불필요)
-python3 -m teleop_dev.robot.arm.servo.keyboard_cartesian --mode sim
+python3 -m robot.arm.servo.keyboard_cartesian --mode sim
 
 # 손: Manus 수신 → DG5F 제어
-python3 -m teleop_dev.robot.hand.receiver --hand-ip 169.254.186.72
+python3 -m robot.hand.receiver --hand-ip 169.254.186.72
 ```
 
 ---
@@ -231,16 +231,16 @@ python3 -m teleop_dev.robot.hand.receiver --hand-ip 169.254.186.72
 
 ```python
 # 프로토콜 (양쪽 PC)
-from teleop_dev.protocol.arm_protocol import TeleopPosePacket, ButtonState
-from teleop_dev.protocol.hand_protocol import HandData, NUM_JOINTS
+from protocol.arm_protocol import TeleopPosePacket, ButtonState
+from protocol.hand_protocol import HandData, NUM_JOINTS
 
 # 조종 PC
-from teleop_dev.operator.arm.sender_base import TeleopSenderBase
-from teleop_dev.operator.arm.vive_tracker import ViveTracker
+from operator.arm.sender_base import TeleopSenderBase
+from operator.arm.vive_tracker import ViveTracker
 
 # 로봇 PC
-from teleop_dev.robot.config import JOINT_NAMES, URDF_PATH
-from teleop_dev.robot.core.robot_backend import create_backend
-from teleop_dev.robot.core.pink_ik import PinkIK
-from teleop_dev.robot.hand.dg5f_client import DG5FClient
+from robot.config import JOINT_NAMES, URDF_PATH
+from robot.core.robot_backend import create_backend
+from robot.core.pink_ik import PinkIK
+from robot.hand.dg5f_client import DG5FClient
 ```

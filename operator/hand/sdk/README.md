@@ -73,13 +73,13 @@ sdk/
 
 ```bash
 # 라이브러리 파일 확인
-ls -la manus/sdk/libManusSDK*.so
+ls -la operator/hand/sdk/libManusSDK*.so
 
 # 심볼 확인
-nm -D manus/sdk/libManusSDK_Integrated.so | grep -i "CoreSdk"
+nm -D operator/hand/sdk/libManusSDK_Integrated.so | grep -i "CoreSdk"
 
 # 의존 라이브러리 확인
-ldd manus/sdk/libManusSDK_Integrated.so
+ldd operator/hand/sdk/libManusSDK_Integrated.so
 ```
 
 ## 주의사항

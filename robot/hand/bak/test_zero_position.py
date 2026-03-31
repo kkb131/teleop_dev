@@ -1,14 +1,14 @@
 """Tesollo DG5F 핸드 전체 관절을 0도로 이동시키는 기본 스크립트.
 
 Usage:
-    python3 -m tesollo.tests.test_zero_position --ip 169.254.186.72
-    python3 -m tesollo.tests.test_zero_position --ip 169.254.186.72 --motion-time 1000
+    python3 -m robot.hand.tests.test_zero_position --ip 169.254.186.72
+    python3 -m robot.hand.tests.test_zero_position --ip 169.254.186.72 --motion-time 1000
 """
 
 import argparse
 import time
 
-from teleop_dev.robot.hand.dg5f_client import DG5FClient
+from robot.hand.dg5f_client import DG5FClient
 
 
 def main():

@@ -6,7 +6,7 @@ from typing import List, Optional
 
 import yaml
 
-from teleop_dev.robot.config import URDF_PATH, JOINT_NAMES, DEFAULT_ROBOT_IP
+from robot.config import URDF_PATH, JOINT_NAMES, DEFAULT_ROBOT_IP
 
 
 _DEFAULT_CONFIG = Path(__file__).parent / "config" / "default.yaml"
@@ -104,7 +104,7 @@ class ImpedanceConfig:
     safety: SafetyConfig = field(default_factory=SafetyConfig)
     impedance: ImpedanceControlConfig = field(default_factory=ImpedanceControlConfig)
 
-    # From standalone.config (read-only)
+    # From robot.config (read-only)
     urdf_path: str = URDF_PATH
     joint_names: List[str] = field(default_factory=lambda: list(JOINT_NAMES))
 
