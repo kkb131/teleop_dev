@@ -242,6 +242,9 @@ class HandVisualizer:
         self._last_data_time = 0.0
         self._data_count = 0
         self._data_fps_timer = time.time()
+        self._baseline = None
+        self._baseline_samples = []
+        self._baseline_count = 30  # Average first N frames as baseline
 
     def draw(self, data: Optional[HandData], mode: str, extra_info: str = ""):
         self._screen.fill(BG_COLOR)
@@ -320,6 +323,16 @@ class HandVisualizer:
 
     def _draw_hand(self, cx: int, cy: int, data: HandData, is_left: bool):
         """Draw 2D hand skeleton centered at (cx, cy)."""
+        # Build baseline from first N frames (open hand at startup)
+        if self._baseline is None:
+            self._baseline_samples.append(data.joint_angles.copy())
+            if len(self._baseline_samples) >= self._baseline_count:
+                self._baseline = np.mean(self._baseline_samples, axis=0)
+                self._baseline_samples = []
+            else:
+                # Use zeros until baseline is ready
+                pass
+
         scale = 1.8
         mirror = -1 if is_left else 1
 
@@ -356,13 +369,18 @@ class HandVisualizer:
             start_x = cx + ox * mirror * scale
             start_y = cy + oy * scale
 
-            # Joint angles for this finger
+            # Joint angles for this finger (subtract baseline if available)
             j_base = f_idx * JOINTS_PER_FINGER
-            spread = data.joint_angles[j_base + 0]
+            if self._baseline is not None:
+                adj = data.joint_angles - self._baseline
+            else:
+                adj = data.joint_angles
+
+            spread = adj[j_base + 0]
             flexions = [
-                data.joint_angles[j_base + 1],
-                data.joint_angles[j_base + 2],
-                data.joint_angles[j_base + 3],
+                adj[j_base + 1],
+                adj[j_base + 2],
+                adj[j_base + 3],
             ]
 
             # Build kinematic chain
@@ -376,7 +394,7 @@ class HandVisualizer:
                 bone_len = bones[bone_idx] * scale
 
                 # Apply flexion (positive = curl inward)
-                angle += flexions[bone_idx - 1] * 0.55
+                angle += flexions[bone_idx - 1] * 1.0
 
                 dx = math.sin(angle) * bone_len * (-1)
                 dy = math.cos(angle) * bone_len * (-1)
