@@ -18,8 +18,8 @@ build/
 Thumbs.db
 
 # Manus SDK build artifacts (*.so is tracked via Git LFS)
-operator/hand/sdk/SDKClient_Linux/SDKClient_Linux.out
-operator/hand/sdk/SDKClient_Linux/*.o
+sender/hand/sdk/SDKClient_Linux/SDKClient_Linux.out
+sender/hand/sdk/SDKClient_Linux/*.o
 
 # Conda
 *.conda
