@@ -278,11 +278,16 @@ def test_mapping(node: TuningNode):
     node.spin_for(2.0)
     baseline = node.get_positions()
 
-    target_rad = math.radians(30)
-    crosstalk_threshold = math.radians(5)
+    target_rad_default = math.radians(15)   # reduced from 30° to avoid physical collision
+    target_rad_spread = math.radians(10)    # even smaller for spread joints (_1)
+    crosstalk_threshold = math.radians(3)   # adjusted for smaller angles
     issues = []
 
     for i, name in enumerate(node._joints):
+        # Spread joints (_1) use smaller angle to avoid collision
+        is_spread = (i % 4 == 0)
+        target_rad = target_rad_spread if is_spread else target_rad_default
+
         # Command single joint
         target = [0.0] * 20
         target[i] = target_rad
