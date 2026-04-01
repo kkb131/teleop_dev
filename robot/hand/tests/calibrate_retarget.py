@@ -137,9 +137,27 @@ def main():
     print(f"    Spread: [{', '.join(f'{v:.2f}' for v in ref_spread[:4])}...]")
     print(f"    Fist:   [{', '.join(f'{v:.2f}' for v in ref_fist[:4])}...]")
 
-    # Load current calibration
-    cfg = TesolloConfig.load(str(config_path))
-    old_cal = np.array(cfg.retarget.calibration_factors, dtype=np.float64)
+    # Load current calibration directly from yaml
+    # (handles case where yaml.dump put it under hand: or retarget:)
+    import yaml
+    with open(config_path) as f:
+        raw_yaml = yaml.safe_load(f) or {}
+
+    old_cal_list = None
+    # Check retarget.calibration_factors first (correct location)
+    if "retarget" in raw_yaml and "calibration_factors" in raw_yaml.get("retarget", {}):
+        old_cal_list = raw_yaml["retarget"]["calibration_factors"]
+        print(f"\n  Current calibration from: retarget.calibration_factors")
+    # Fallback: check hand.calibration_factors (misplaced by previous yaml.dump)
+    elif "hand" in raw_yaml and "calibration_factors" in raw_yaml.get("hand", {}):
+        old_cal_list = raw_yaml["hand"]["calibration_factors"]
+        print(f"\n  Current calibration from: hand.calibration_factors (will move to retarget)")
+    else:
+        old_cal_list = list(DEFAULT_CALIBRATION_FACTORS)
+        print(f"\n  No calibration in yaml — using defaults")
+
+    old_cal = np.array(old_cal_list, dtype=np.float64)
+    print(f"  Old cal (first 4): [{', '.join(f'{v:.2f}' for v in old_cal[:4])}...]")
 
     rclpy.init()
     node = CalibObserver(hand=args.hand)
@@ -220,13 +238,15 @@ def main():
     # ── Save to default.yaml ─────────────────────────────
     print(f"\n  Saving to {config_path}...")
 
-    import yaml
-    with open(config_path) as f:
-        raw_yaml = yaml.safe_load(f) or {}
-
+    # Re-read yaml for saving (raw_yaml already loaded above)
     if "retarget" not in raw_yaml:
         raw_yaml["retarget"] = {}
     raw_yaml["retarget"]["calibration_factors"] = [round(float(v), 3) for v in new_cal]
+
+    # Clean up misplaced hand.calibration_factors if present
+    if "hand" in raw_yaml and "calibration_factors" in raw_yaml.get("hand", {}):
+        del raw_yaml["hand"]["calibration_factors"]
+        print(f"  Removed stale hand.calibration_factors")
 
     with open(config_path, "w") as f:
         yaml.dump(raw_yaml, f, default_flow_style=False, sort_keys=False)
