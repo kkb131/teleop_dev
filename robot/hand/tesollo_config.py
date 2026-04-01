@@ -60,13 +60,19 @@ class TesolloConfig:
 
         cfg = cls()
 
+        def _safe_init(cls_, d):
+            """Initialize dataclass, ignoring unknown keys."""
+            import dataclasses
+            valid = {f.name for f in dataclasses.fields(cls_)}
+            return cls_(**{k: v for k, v in d.items() if k in valid})
+
         if "network" in data:
-            cfg.network = NetworkConfig(**data["network"])
+            cfg.network = _safe_init(NetworkConfig, data["network"])
         if "hand" in data:
-            cfg.hand = HandConfig(**data["hand"])
+            cfg.hand = _safe_init(HandConfig, data["hand"])
         if "retarget" in data:
-            cfg.retarget = RetargetConfig(**data["retarget"])
+            cfg.retarget = _safe_init(RetargetConfig, data["retarget"])
         if "control" in data:
-            cfg.control = ControlConfig(**data["control"])
+            cfg.control = _safe_init(ControlConfig, data["control"])
 
         return cfg
