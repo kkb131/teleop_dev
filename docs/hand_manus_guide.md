@@ -6,20 +6,40 @@ Manus Quantum Metaglove로 손 동작을 캡처하여 Tesollo DG5F 로봇 핸드
 
 ## 전체 흐름
 
+### Mode A: Raw 전송 (retarget은 로봇 PC에서)
+
 ```
 조종 PC (Operator)                          로봇 PC (AGX Orin)
 ┌──────────────────────┐                   ┌──────────────────────────────┐
-│ Manus Glove          │                   │ dg5f_driver (ros2_control)   │
+│ Manus Glove          │                   │ dg5f_driver (pid_all_ctrl)   │
 │   ↓                  │                   │   ↓                          │
 │ ManusReader (SDK)    │                   │ ManusReceiver (UDP)          │
 │   ↓                  │   UDP 9872        │   ↓                          │
-│ manus_sender.py  ────┼──────────────────→│ ManusToD5FRetarget           │
+│ manus_sender.py  ────┼──────────────────→│ ManusToD5FRetarget + EMA     │
 │                      │                   │   ↓                          │
 │ [pynput 키보드]      │                   │ DG5FROS2Client (ROS2 topic)  │
 │                      │                   │   ↓ MultiDOFCommand          │
 │                      │                   │ Tesollo DG5F Hand            │
 └──────────────────────┘                   └──────────────────────────────┘
 ```
+
+### Mode B: Vector retarget (retarget은 조종 PC에서)
+
+```
+조종 PC (Operator)                          로봇 PC (AGX Orin)
+┌────────────────────────────┐             ┌──────────────────────────────┐
+│ Manus Glove                │             │ dg5f_driver (pid_all_ctrl)   │
+│   ↓                        │             │   ↓                          │
+│ ManusReader (SDK)          │             │ ManusReceiver (UDP)          │
+│   ↓                        │  UDP 9872   │   ↓ (retarget 스킵)         │
+│ VectorRetarget (최적화)    │             │ DG5FROS2Client               │
+│   ↓ DG5F angles            │             │   ↓ MultiDOFCommand          │
+│ manus_sender.py ───────────┼────────────→│ Tesollo DG5F Hand            │
+│  (retargeted=true)         │             │                              │
+└────────────────────────────┘             └──────────────────────────────┘
+```
+
+> **자동 감지**: packet에 `"retargeted": true`가 있으면 receiver가 retarget을 스킵.
 
 ---
 
@@ -136,13 +156,25 @@ python3 -m sender.hand.calibrate \
 
 ## 4. Sender 실행 (조종 PC)
 
-### 기본 실행
+### 기본 실행 (Mode A: raw 전송)
 
 ```bash
 python3 -m sender.hand.manus_sender \
   --target-ip 192.168.0.10 \
   --hand right
 ```
+
+### Vector retarget 실행 (Mode B: 조종 PC에서 retarget)
+
+```bash
+python3 -m sender.hand.manus_sender \
+  --target-ip 192.168.0.10 \
+  --hand right \
+  --retarget vector \
+  --calibrate
+```
+
+`--calibrate`: 시작 시 3초간 손을 편 상태로 baseline 캘리브레이션.
 
 ### CLI 옵션
 
@@ -154,6 +186,9 @@ python3 -m sender.hand.manus_sender \
 | `--hand` | right | `left`, `right`, 또는 `both` |
 | `--config` | default.yaml | YAML 설정 파일 경로 |
 | `--sdk-path` | (자동) | SDKClient_Linux.out 경로 |
+| `--retarget` | none | `none` (raw) 또는 `vector` (벡터 최적화) |
+| `--calibrate` | false | 시작 시 open-hand baseline 캘리브레이션 |
+| `--urdf` | (자동) | DG5F URDF 경로 (vector 모드용) |
 
 ### 키보드 제어 (sender 실행 중)
 
@@ -346,6 +381,7 @@ Left hand: `rj_` → `lj_`
   "wrist_pos": [x, y, z],
   "wrist_quat": [w, x, y, z],
   "tracking": true,
+  "retargeted": false,
   "buttons": {
     "estop": false,
     "reset": false,
@@ -360,6 +396,14 @@ Left hand: `rj_` → `lj_`
 - `joint_angles`: 라디안, 순서는 Thumb→Index→Middle→Ring→Pinky (각 4관절)
 - `wrist_quat`: wxyz 순서
 - `tracking`: false이면 글러브 추적 불가 상태
+- `retargeted`: true이면 sender에서 이미 DG5F 각도로 변환됨 (receiver가 retarget 스킵)
+
+### 특수 패킷
+
+| type | 용도 |
+|------|------|
+| `"manus"` | 핸드 데이터 (위 형식) |
+| `"reload_config"` | receiver에 config 재로드 트리거 (calibrate_retarget에서 전송) |
 
 ---
 
@@ -421,14 +465,25 @@ python3 -m robot.hand.tests.test_tuning --hand right --test zero
 
 ## 12. 빠른 시작 요약
 
+### Mode A: Raw 전송 (로봇 PC에서 retarget)
+
 | 단계 | 조종 PC | 로봇 PC |
 |------|---------|---------|
 | 1. SDK 빌드 | `cd sender/hand/sdk && ./build.sh` | - |
-| 2. 캘리브레이션 | `python3 -m sender.hand.calibrate --hand right` | - |
-| 3. 드라이버 시작 | - | `ros2 launch dg5f_driver dg5f_right_pid_all_controller.launch.py delto_ip:=169.254.186.72` |
-| 4. Receiver 시작 | - | `python3 -m robot.hand.receiver --hand right` |
-| 5. Sender 시작 | `python3 -m sender.hand.manus_sender --target-ip <로봇IP>` | (자동 수신) |
-| 6. 동작 확인 | 손을 움직여서 확인 | DG5F 핸드 동작 확인 |
+| 2. 드라이버 시작 | - | `ros2 launch dg5f_driver dg5f_right_pid_all_controller.launch.py delto_ip:=169.254.186.72` |
+| 3. Receiver 시작 | - | `python3 -m robot.hand.receiver --hand right` |
+| 4. Sender 시작 | `python3 -m sender.hand.manus_sender --target-ip <로봇IP>` | (자동 수신) |
+| 5. 동작 확인 | 손을 움직여서 확인 | DG5F 핸드 동작 확인 |
+
+### Mode B: Vector retarget (조종 PC에서 retarget)
+
+| 단계 | 조종 PC | 로봇 PC |
+|------|---------|---------|
+| 1. SDK 빌드 | `cd sender/hand/sdk && ./build.sh` | - |
+| 2. 드라이버 시작 | - | `ros2 launch dg5f_driver dg5f_right_pid_all_controller.launch.py delto_ip:=169.254.186.72` |
+| 3. Receiver 시작 | - | `python3 -m robot.hand.receiver --hand right` |
+| 4. Sender 시작 | `python3 -m sender.hand.manus_sender --target-ip <로봇IP> --retarget vector --calibrate` | (자동 수신, retarget 스킵) |
+| 5. 동작 확인 | 시작 3초: 손 펴기 (캘리), 이후 자유 동작 | DG5F 핸드 동작 확인 |
 
 ---
 

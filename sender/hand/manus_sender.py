@@ -8,9 +8,15 @@ Requirements: numpy, pyyaml, pynput
     pip install numpy pyyaml pynput
 
 Usage:
-    python3 -m sender.hand.manus_sender --target-ip <ROBOT_PC_IP>
+    # 기존 (raw 전송, retarget은 receiver에서)
+    python3 -m sender.hand.manus_sender --target-ip <ROBOT_IP> --hand right
     python3 -m sender.hand.manus_sender --config sender/hand/config/default.yaml
     python3 -m sender.hand.manus_sender --target-ip 10.0.0.5 --hand both
+    
+    # 벡터 최적화 retarget (sender에서 DG5F 각도로 변환 후 전송)
+    python3 -m sender.hand.manus_sender --target-ip <ROBOT_IP> --hand right --retarget vector --calibrate
+    
+
 """
 
 import argparse
@@ -108,9 +114,9 @@ class KeyboardState:
         pass
 
 
-def _build_packet(data, buttons: dict) -> dict:
+def _build_packet(data, buttons: dict, retargeted: bool = False) -> dict:
     """Build a JSON-serializable UDP packet from HandData."""
-    return {
+    pkt = {
         "type": "manus",
         "hand": data.hand_side,
         "joint_angles": data.joint_angles.tolist(),
@@ -121,6 +127,9 @@ def _build_packet(data, buttons: dict) -> dict:
         "buttons": buttons,
         "timestamp": time.time(),
     }
+    if retargeted:
+        pkt["retargeted"] = True
+    return pkt
 
 
 def _build_null_packet(hand_side: str, buttons: dict) -> dict:
@@ -153,6 +162,13 @@ def main():
                         help="Which hand(s) to stream (overrides config)")
     parser.add_argument("--sdk-path", default=None,
                         help="Path to SDKClient_Linux.out (overrides config)")
+    parser.add_argument("--retarget", default="none",
+                        choices=["none", "vector"],
+                        help="Retarget mode: none=raw angles, vector=optimization-based DG5F retarget")
+    parser.add_argument("--calibrate", action="store_true",
+                        help="Calibrate baseline at startup (hold hand flat, fingers together)")
+    parser.add_argument("--urdf", default=None,
+                        help="DG5F URDF path (for vector retarget)")
     args = parser.parse_args()
 
     # Load config
@@ -173,6 +189,35 @@ def main():
     reader = ManusReader(sdk_bin_path=sdk_path, hand_side=hand_side)
     reader.connect()
 
+    # Vector retarget setup
+    retarget = None
+    if args.retarget == "vector":
+        import numpy as np
+        from sender.hand.vector_retarget import VectorRetarget
+        retarget = VectorRetarget(
+            hand_side=hand_side if hand_side != "both" else "right",
+            urdf_path=args.urdf,
+        )
+        print(f"[Sender] Vector retarget enabled ({hand_side})")
+
+        if args.calibrate:
+            print("[Sender] Calibrating baseline — hold hand FLAT, fingers TOGETHER...")
+            print("[Sender] Recording for 3 seconds...")
+            time.sleep(1.0)  # give user a moment
+            samples = []
+            cal_start = time.time()
+            while time.time() - cal_start < 3.0:
+                data = reader.get_hand_data()
+                if data is not None:
+                    samples.append(data.joint_angles.copy())
+                time.sleep(0.016)
+            if samples:
+                baseline = np.mean(samples, axis=0)
+                retarget.calibrate_baseline(baseline)
+                print(f"[Sender] Baseline recorded ({len(samples)} samples)")
+            else:
+                print("[Sender] WARNING: No data during calibration!")
+
     # Start keyboard listener
     kb = KeyboardState()
     kb.start()
@@ -185,6 +230,7 @@ def main():
     lost_count = 0
 
     print(f"\n[Sender] Config: hand={hand_side}, sdk={sdk_path}")
+    print(f"[Sender] Retarget: {args.retarget}")
     print(f"[Sender] Sending to {target_ip}:{port} at {hz} Hz")
     print("[Sender] Press Ctrl+C or Q to stop.\n")
 
@@ -203,7 +249,11 @@ def main():
                 hands = reader.get_both_hands()
                 for side, data in hands.items():
                     if data is not None:
-                        pkt = _build_packet(data, buttons)
+                        if retarget is not None:
+                            import numpy as np
+                            dg5f_q = retarget.retarget(data.joint_angles)
+                            data.joint_angles = dg5f_q.astype(np.float32)
+                        pkt = _build_packet(data, buttons, retargeted=(retarget is not None))
                         if lost_count > 0:
                             print(f"\n[Sender] {side} tracking recovered")
                     else:
@@ -214,7 +264,11 @@ def main():
             else:
                 data = reader.get_hand_data()
                 if data is not None:
-                    pkt = _build_packet(data, buttons)
+                    if retarget is not None:
+                        import numpy as np
+                        dg5f_q = retarget.retarget(data.joint_angles)
+                        data.joint_angles = dg5f_q.astype(np.float32)
+                    pkt = _build_packet(data, buttons, retargeted=(retarget is not None))
                     if lost_count > 0:
                         print(f"\n[Sender] Tracking recovered (was lost for {lost_count} frames)")
                         lost_count = 0

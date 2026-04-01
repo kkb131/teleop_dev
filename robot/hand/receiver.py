@@ -1,17 +1,24 @@
 #!/usr/bin/env python3
-"""Manus UDP receiver → DG5F retarget → ROS2 JointTrajectory control loop.
+"""Manus UDP receiver → DG5F PID controller (MultiDOFCommand).
 
 Receives Manus glove data via UDP (from manus_sender on operator PC),
-retargets joint angles to DG5F motor commands, and publishes via ROS2.
+retargets joint angles to DG5F motor commands, and publishes via
+MultiDOFCommand to pid_controller/PidController.
 
-Requires dg5f_driver running:
-    ros2 launch dg5f_driver dg5f_right_driver.launch.py delto_ip:=169.254.186.72
+Two retarget modes (auto-detected via packet "retargeted" flag):
+  - sender raw mode: receiver applies ManusToD5FRetarget + EMA filter
+  - sender vector mode: sender already computed DG5F angles, receiver passes through
+
+Supports hot-reload of calibration via {"type":"reload_config"} UDP trigger.
+
+Requires dg5f_driver (PID mode) running:
+    ros2 launch dg5f_driver dg5f_right_pid_all_controller.launch.py delto_ip:=169.254.186.72
 
 Usage:
     # Dry-run (no hardware — just receive + retarget + print):
     python3 -m robot.hand.receiver --dry-run
 
-    # ROS2 mode (dg5f_driver must be running):
+    # ROS2 mode (dg5f_driver pid_all must be running):
     python3 -m robot.hand.receiver --hand right
 
     # With config file:
@@ -53,6 +60,7 @@ class ManusReceiver:
         self._pkt_count = 0
         self._last_recv_time = 0.0
         self._reload_requested = False
+        self._is_retargeted = False  # True if sender already applied retarget
 
     def start(self):
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -84,6 +92,11 @@ class ManusReceiver:
         return self._last_recv_time
 
     @property
+    def is_retargeted(self) -> bool:
+        """True if the sender already applied retarget (vector mode)."""
+        return self._is_retargeted
+
+    @property
     def reload_requested(self) -> bool:
         if self._reload_requested:
             self._reload_requested = False
@@ -109,6 +122,9 @@ class ManusReceiver:
                     hand_side=pkt.get("hand", "right"),
                     timestamp=pkt.get("timestamp", time.time()),
                 )
+
+                # Track if sender already retargeted
+                self._is_retargeted = pkt.get("retargeted", False)
 
                 # Check e-stop
                 buttons = pkt.get("buttons", {})
@@ -265,8 +281,11 @@ def main():
             if data is not None and data is not last_data:
                 last_data = data
 
-                # Retarget (raw → DG5F angles)
-                dg5f_raw = retarget.retarget(data.joint_angles)
+                # Retarget (skip if sender already applied vector retarget)
+                if receiver.is_retargeted:
+                    dg5f_raw = data.joint_angles
+                else:
+                    dg5f_raw = retarget.retarget(data.joint_angles)
 
                 # EMA filter on retarget OUTPUT to reduce jitter
                 if filtered_dg5f is None:
