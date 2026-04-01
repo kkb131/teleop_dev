@@ -222,8 +222,10 @@ def main():
 
     import yaml
     with open(config_path) as f:
-        raw_yaml = yaml.safe_load(f)
+        raw_yaml = yaml.safe_load(f) or {}
 
+    if "retarget" not in raw_yaml:
+        raw_yaml["retarget"] = {}
     raw_yaml["retarget"]["calibration_factors"] = [round(float(v), 3) for v in new_cal]
 
     with open(config_path, "w") as f:
