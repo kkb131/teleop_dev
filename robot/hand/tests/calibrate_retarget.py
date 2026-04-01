@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """2-pose calibration for Manus→DG5F retarget (observer mode).
 
-Runs alongside receiver.py — does NOT send commands to DG5F.
-Observes Manus UDP + DG5F /joint_states, computes calibration factors
-so that spread→poses.json spread, fist→poses.json fist.
+Observes DG5F /joint_states ONLY — does NOT bind UDP or send commands.
+Compares actual DG5F positions vs poses.json reference to compute
+calibration_factors.
 
 Requires (all running simultaneously):
     T1: ros2 launch dg5f_driver dg5f_right_pid_all_controller.launch.py
     T2: python3 -m robot.hand.receiver --hand right
-    T3: (operator PC) python3 -m sender.hand.manus_sender
+    T3: (operator PC) manus_sender
 
 Usage:
     python3 -m robot.hand.tests.calibrate_retarget --hand right
@@ -28,16 +28,12 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
 
-from robot.hand.retarget import (
-    ManusToD5FRetarget, RIGHT_LIMITS, LEFT_LIMITS,
-    DEFAULT_CALIBRATION_FACTORS,
-)
+from robot.hand.retarget import DEFAULT_CALIBRATION_FACTORS
 from robot.hand.tesollo_config import TesolloConfig
 
 FINGER_NAMES = ["Thumb", "Index", "Middle", "Ring", "Pinky"]
 JOINT_LABELS = ["Spread", "MCP", "PIP", "DIP"]
 
-# Load poses from test_pose.py's poses.json
 POSES_JSON = os.path.join(os.path.dirname(__file__), "..", "config", "poses.json")
 
 
@@ -45,7 +41,7 @@ def load_reference_poses(hand_side):
     """Load spread/fist reference poses from poses.json."""
     if not os.path.exists(POSES_JSON):
         print(f"  [ERROR] poses.json not found: {POSES_JSON}")
-        print(f"  Record poses first: python3 -m robot.hand.tests.test_pose --hand {hand_side} --record spread")
+        print(f"  Record first: python3 -m robot.hand.tests.test_pose --hand {hand_side} --record spread")
         return None, None
 
     with open(POSES_JSON) as f:
@@ -54,31 +50,26 @@ def load_reference_poses(hand_side):
     spread_key = f"spread_{hand_side}"
     fist_key = f"fist_{hand_side}"
 
-    if spread_key not in saved:
-        print(f"  [ERROR] '{spread_key}' not in poses.json")
-        print(f"  Record: python3 -m robot.hand.tests.test_pose --hand {hand_side} --record spread")
-        return None, None
-    if fist_key not in saved:
-        print(f"  [ERROR] '{fist_key}' not in poses.json")
-        print(f"  Record: python3 -m robot.hand.tests.test_pose --hand {hand_side} --record fist")
-        return None, None
+    for key in [spread_key, fist_key]:
+        if key not in saved:
+            print(f"  [ERROR] '{key}' not in poses.json")
+            print(f"  Record: python3 -m robot.hand.tests.test_pose --hand {hand_side} --record {key.split('_')[0]}")
+            return None, None
 
     return np.array(saved[spread_key]), np.array(saved[fist_key])
 
 
 class CalibObserver(Node):
-    """Observes DG5F joint_states without publishing commands."""
+    """Observes DG5F joint_states only. No publishing."""
 
     def __init__(self, hand: str):
         super().__init__("calibrate_observer")
         prefix = f"dg5f_{hand}"
-        self._hand = hand
         self._js_latest = None
         self._js_names = None
         self._joints = ([f"rj_dg_{f}_{j}" for f in range(1, 6) for j in range(1, 5)]
                         if hand == "right" else
                         [f"lj_dg_{f}_{j}" for f in range(1, 6) for j in range(1, 5)])
-
         self._sub = self.create_subscription(
             JointState, f"/{prefix}/joint_states", self._js_cb, 10)
 
@@ -87,11 +78,9 @@ class CalibObserver(Node):
         if self._js_names is None:
             self._js_names = list(msg.name)
 
-    def get_dg5f_positions(self) -> np.ndarray:
-        """Return 20 joint positions in canonical order."""
+    def get_positions(self) -> np.ndarray:
         if self._js_latest is None or self._js_names is None:
             return None
-        # Reorder from joint_states name order → canonical order
         name_to_idx = {n: i for i, n in enumerate(self._js_names)}
         pos = []
         for jname in self._joints:
@@ -101,64 +90,28 @@ class CalibObserver(Node):
                 pos.append(0.0)
         return np.array(pos)
 
-    def spin_for(self, seconds):
-        t0 = time.monotonic()
-        while (time.monotonic() - t0) < seconds:
-            rclpy.spin_once(self, timeout_sec=0.01)
 
-
-class ManusUDPSniff:
-    """Sniff Manus UDP packets (SO_REUSEPORT alongside receiver.py)."""
-
-    def __init__(self, port=9872):
-        self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        try:
-            self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-        except AttributeError:
-            pass
-        self._sock.bind(("0.0.0.0", port))
-        self._sock.settimeout(1.0)
-
-    def read(self) -> np.ndarray:
-        try:
-            raw, _ = self._sock.recvfrom(4096)
-            pkt = json.loads(raw.decode())
-            if pkt.get("type") == "manus":
-                return np.array(pkt["joint_angles"], dtype=np.float32)
-        except (socket.timeout, json.JSONDecodeError, KeyError):
-            pass
-        return None
-
-    def close(self):
-        self._sock.close()
-
-
-def collect_pose(node, manus_sniff, duration=3.0, hz=60):
-    """Collect Manus + DG5F joint_states simultaneously. No commands sent."""
+def collect_dg5f(node, duration=3.0, hz=60):
+    """Collect DG5F joint_states samples only."""
     dt = 1.0 / hz
-    manus_samples = []
-    dg5f_samples = []
+    samples = []
     start = time.time()
-
     while time.time() - start < duration:
-        rclpy.spin_once(node, timeout_sec=0)
-        m = manus_sniff.read()
-        d = node.get_dg5f_positions()
-        if m is not None and d is not None:
-            manus_samples.append(m.copy())
-            dg5f_samples.append(d.copy())
+        rclpy.spin_once(node, timeout_sec=0.01)
+        d = node.get_positions()
+        if d is not None:
+            samples.append(d.copy())
         time.sleep(dt)
-
-    if not manus_samples:
-        return None, None
-    return np.mean(manus_samples, axis=0), np.mean(dg5f_samples, axis=0)
+    if not samples:
+        return None
+    return np.mean(samples, axis=0)
 
 
 def main():
     parser = argparse.ArgumentParser(description="2-pose retarget calibration (observer)")
     parser.add_argument("--hand", default="right", choices=["left", "right"])
-    parser.add_argument("--port", type=int, default=9872)
+    parser.add_argument("--port", type=int, default=9872,
+                        help="UDP port for reload trigger")
     parser.add_argument("--duration", type=float, default=3.0)
     args = parser.parse_args()
 
@@ -168,103 +121,81 @@ def main():
     print("  Manus → DG5F 2-Pose Calibration (Observer Mode)")
     print(f"  Hand: {args.hand}  |  Duration: {args.duration}s per pose")
     print("=" * 65)
-    print("\n  This script OBSERVES only — receiver.py controls DG5F.")
-    print("  Prerequisites (must be running):")
-    print("    T1: ros2 launch dg5f_driver dg5f_right_pid_all_controller.launch.py")
-    print("    T2: python3 -m robot.hand.receiver --hand right")
+    print("\n  This script OBSERVES /joint_states only.")
+    print("  receiver.py keeps controlling DG5F — no interference.")
+    print("\n  Prerequisites (must be running):")
+    print("    T1: dg5f_driver (pid_all_controller)")
+    print("    T2: robot.hand.receiver --hand right")
     print("    T3: (operator) manus_sender")
 
-    # Load reference poses from poses.json
+    # Load reference poses
     ref_spread, ref_fist = load_reference_poses(args.hand)
     if ref_spread is None or ref_fist is None:
         sys.exit(1)
 
-    print(f"\n  Reference poses loaded from poses.json:")
-    print(f"    Spread: {ref_spread[:4]}... (first 4 joints)")
-    print(f"    Fist:   {ref_fist[:4]}... (first 4 joints)")
+    print(f"\n  Reference from poses.json:")
+    print(f"    Spread: [{', '.join(f'{v:.2f}' for v in ref_spread[:4])}...]")
+    print(f"    Fist:   [{', '.join(f'{v:.2f}' for v in ref_fist[:4])}...]")
 
     # Load current calibration
     cfg = TesolloConfig.load(str(config_path))
     old_cal = np.array(cfg.retarget.calibration_factors, dtype=np.float64)
-    retarget = ManusToD5FRetarget(
-        hand_side=args.hand, calibration_factors=cfg.retarget.calibration_factors)
 
     rclpy.init()
     node = CalibObserver(hand=args.hand)
-    manus_sniff = ManusUDPSniff(port=args.port)
 
-    # Wait for data
+    # Wait for joint_states
     print("\n  Waiting for DG5F joint_states...", end=" ", flush=True)
     for _ in range(50):
         rclpy.spin_once(node, timeout_sec=0.1)
-        if node.get_dg5f_positions() is not None:
+        if node.get_positions() is not None:
             break
-    if node.get_dg5f_positions() is None:
+    if node.get_positions() is None:
         print("[FAIL]")
-        sys.exit(1)
-    print("[OK]")
-
-    print("  Waiting for Manus UDP...", end=" ", flush=True)
-    got = False
-    for _ in range(30):
-        if manus_sniff.read() is not None:
-            got = True
-            break
-    if not got:
-        print("[FAIL] — is manus_sender running?")
+        node.destroy_node()
+        rclpy.shutdown()
         sys.exit(1)
     print("[OK]")
 
     # ── Pose 1: Spread ───────────────────────────────────
     print(f"\n" + "-" * 65)
     print(f"  POSE 1: SPREAD")
-    print(f"  Open your hand wide (fingers spread apart).")
-    print(f"  The DG5F should also be in spread position (via receiver).")
-    input("  Press Enter when holding the SPREAD pose... ")
+    print(f"  Open your Manus glove hand wide (fingers spread apart).")
+    print(f"  DG5F should follow via receiver.py.")
+    input("  Press Enter when holding SPREAD... ")
 
-    print(f"  Recording {args.duration}s (observing only)...")
-    manus_spread, dg5f_spread = collect_pose(node, manus_sniff, args.duration)
-    if manus_spread is None:
-        print("  [ERROR] No data!")
+    print(f"  Recording DG5F positions ({args.duration}s)...")
+    dg5f_spread = collect_dg5f(node, args.duration)
+    if dg5f_spread is None:
+        print("  [ERROR] No joint_states data!")
         sys.exit(1)
-    retarget_spread = retarget.retarget(manus_spread)
-    print(f"  Spread recorded: {len(manus_spread)} joints")
+    print(f"  Spread recorded.")
 
     # ── Pose 2: Fist ─────────────────────────────────────
     print(f"\n" + "-" * 65)
     print(f"  POSE 2: FIST")
-    print(f"  Make a tight fist (thumb over fingers).")
-    print(f"  The DG5F should also be in fist position (via receiver).")
-    input("  Press Enter when holding the FIST pose... ")
+    print(f"  Make a tight fist with your Manus glove hand.")
+    print(f"  DG5F should follow via receiver.py.")
+    input("  Press Enter when holding FIST... ")
 
-    print(f"  Recording {args.duration}s (observing only)...")
-    manus_fist, dg5f_fist = collect_pose(node, manus_sniff, args.duration)
-    if manus_fist is None:
-        print("  [ERROR] No data!")
+    print(f"  Recording DG5F positions ({args.duration}s)...")
+    dg5f_fist = collect_dg5f(node, args.duration)
+    if dg5f_fist is None:
+        print("  [ERROR] No joint_states data!")
         sys.exit(1)
-    retarget_fist = retarget.retarget(manus_fist)
     print(f"  Fist recorded.")
 
-    manus_sniff.close()
     node.destroy_node()
     rclpy.shutdown()
 
-    # ── Compute new calibration ──────────────────────────
-    # What retarget currently produces (with current cal)
-    current_range = retarget_fist - retarget_spread
+    # ── Compute calibration ──────────────────────────────
+    actual_range = dg5f_fist - dg5f_spread      # what DG5F actually did
+    desired_range = ref_fist - ref_spread         # what poses.json says
 
-    # What DG5F actually did
-    actual_range = dg5f_fist - dg5f_spread
-
-    # What poses.json says it SHOULD do
-    desired_range = ref_fist - ref_spread
-
-    # Correction: scale old_cal so that current_range → desired_range
     new_cal = old_cal.copy()
     for i in range(20):
-        if abs(current_range[i]) > 0.01:
-            correction = desired_range[i] / current_range[i]
-            new_cal[i] = old_cal[i] * correction
+        if abs(actual_range[i]) > 0.01:
+            new_cal[i] = old_cal[i] * (desired_range[i] / actual_range[i])
         new_cal[i] = np.clip(new_cal[i], 0.1, 5.0)
 
     # ── Display ──────────────────────────────────────────
@@ -303,14 +234,18 @@ def main():
         vals = ", ".join(f"{new_cal[f_idx*4+j]:.3f}" for j in range(4))
         print(f"    {FINGER_NAMES[f_idx]:7s}: [{vals}]")
 
-    # Send reload trigger to receiver
-    print(f"\n  Sending reload trigger to receiver (port {args.port})...")
-    trigger_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    trigger_sock.sendto(
-        json.dumps({"type": "reload_config"}).encode(),
-        ("127.0.0.1", args.port))
-    trigger_sock.close()
-    print(f"  Receiver will apply new calibration automatically.")
+    # Reload trigger
+    print(f"\n  Sending reload trigger to receiver...")
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.sendto(json.dumps({"type": "reload_config"}).encode(),
+                 ("127.0.0.1", args.port))
+        s.close()
+        print(f"  Receiver will apply new calibration automatically.")
+    except Exception as e:
+        print(f"  [WARN] Reload trigger failed: {e}")
+        print(f"  Restart receiver.py manually to apply.")
+
     print(f"{'=' * 65}")
 
 
