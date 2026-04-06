@@ -202,21 +202,22 @@ def main():
 
         if args.calibrate:
             print("[Sender] Calibrating baseline — hold hand FLAT, fingers TOGETHER...")
-            print("[Sender] Recording for 3 seconds...")
-            time.sleep(1.0)  # give user a moment
+            print("[Sender] Waiting for skeleton data (3 seconds)...")
+            time.sleep(1.0)
             samples = []
             cal_start = time.time()
             while time.time() - cal_start < 3.0:
                 data = reader.get_hand_data()
-                if data is not None:
-                    samples.append(data.joint_angles.copy())
+                if data is not None and data.skeleton is not None:
+                    samples.append(data.skeleton.copy())
                 time.sleep(0.016)
             if samples:
                 baseline = np.mean(samples, axis=0)
                 retarget.calibrate_baseline(baseline)
-                print(f"[Sender] Baseline recorded ({len(samples)} samples)")
+                print(f"[Sender] Skeleton baseline recorded ({len(samples)} samples)")
             else:
-                print("[Sender] WARNING: No data during calibration!")
+                print("[Sender] WARNING: No skeleton data! Is SDK built with skeleton support?")
+                print("[Sender] Continuing without baseline...")
 
     # Start keyboard listener
     kb = KeyboardState()
@@ -249,11 +250,12 @@ def main():
                 hands = reader.get_both_hands()
                 for side, data in hands.items():
                     if data is not None:
-                        if retarget is not None:
+                        if retarget is not None and data.skeleton is not None:
                             import numpy as np
-                            dg5f_q = retarget.retarget(data.joint_angles)
+                            dg5f_q = retarget.retarget(data.skeleton)
                             data.joint_angles = dg5f_q.astype(np.float32)
-                        pkt = _build_packet(data, buttons, retargeted=(retarget is not None))
+                        pkt = _build_packet(data, buttons,
+                                            retargeted=(retarget is not None and data.has_skeleton))
                         if lost_count > 0:
                             print(f"\n[Sender] {side} tracking recovered")
                     else:
@@ -264,11 +266,12 @@ def main():
             else:
                 data = reader.get_hand_data()
                 if data is not None:
-                    if retarget is not None:
+                    if retarget is not None and data.skeleton is not None:
                         import numpy as np
-                        dg5f_q = retarget.retarget(data.joint_angles)
+                        dg5f_q = retarget.retarget(data.skeleton)
                         data.joint_angles = dg5f_q.astype(np.float32)
-                    pkt = _build_packet(data, buttons, retargeted=(retarget is not None))
+                    pkt = _build_packet(data, buttons,
+                                        retargeted=(retarget is not None and data.has_skeleton))
                     if lost_count > 0:
                         print(f"\n[Sender] Tracking recovered (was lost for {lost_count} frames)")
                         lost_count = 0

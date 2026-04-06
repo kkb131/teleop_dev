@@ -328,9 +328,16 @@ UDP 수신 + retarget 결과만 출력, ROS2 발행 안 함.
 
 ---
 
-## 8. 관절 매핑
+## 8. 관절 매핑 및 데이터 스트림
 
-### Manus 글러브 (20관절)
+### Manus SDK 데이터 스트림
+
+| 스트림 | 데이터 | 용도 |
+|--------|--------|------|
+| **Ergonomics** | 20 관절각도 (degrees) | Mode A: 직접 관절 매핑 |
+| **Raw Skeleton** | 21 노드 × (position + quaternion) | Mode B: 벡터 최적화 retarget |
+
+### Manus Ergonomics (20관절)
 
 5개 손가락 x 4관절:
 
@@ -343,15 +350,34 @@ UDP 수신 + retarget 결과만 출력, ROS2 발행 안 함.
 
 순서: Thumb(0-3) → Index(4-7) → Middle(8-11) → Ring(12-15) → Pinky(16-19)
 
+### Manus Raw Skeleton (21노드)
+
+```
+[0]     = wrist (hand root)
+[1-4]   = thumb:  CMC, MCP, IP, TIP
+[5-8]   = index:  MCP, PIP, DIP, TIP
+[9-12]  = middle: MCP, PIP, DIP, TIP
+[13-16] = ring:   MCP, PIP, DIP, TIP
+[17-20] = pinky:  MCP, PIP, DIP, TIP
+```
+
+각 노드: `[x, y, z, qw, qx, qy, qz]` (position + quaternion)
+Fingertip indices: `[4, 8, 12, 16, 20]`
+
 ### Tesollo DG5F (20모터)
 
-동일한 5x4 구조. `ManusToD5FRetarget`이 Manus 각도를 DG5F 모터 각도로 변환.
-
+**Mode A** (raw): `ManusToD5FRetarget`이 Manus 관절각도를 DG5F 모터 각도로 변환.
 ```python
 from robot.hand.retarget import ManusToD5FRetarget
-
 retarget = ManusToD5FRetarget(hand_side="right")
 dg5f_angles = retarget.retarget(manus_angles)  # ndarray[20] → ndarray[20]
+```
+
+**Mode B** (vector): `VectorRetarget`이 Manus skeleton 3D 위치로부터 DG5F 각도를 최적화.
+```python
+from sender.hand.vector_retarget import VectorRetarget
+rt = VectorRetarget(hand_side="right")
+dg5f_angles = rt.retarget(skeleton)  # ndarray[21,7] → ndarray[20]
 ```
 
 ### DG5F 관절 이름

@@ -1487,7 +1487,7 @@ void SDKClient::StreamErgonomicsAsJSON()
 	auto t_Now = std::chrono::system_clock::now();
 	double t_Timestamp = std::chrono::duration<double>(t_Now.time_since_epoch()).count();
 
-	// Helper lambda: output one hand's data as JSON line
+	// Helper lambda: output one hand's data as JSON line (ergonomics + skeleton)
 	auto t_OutputHand = [&](const char* p_Hand, ErgonomicsData& p_Ergo, uint32_t p_GloveID, int p_Offset)
 	{
 		if (p_GloveID == 0) return;
@@ -1505,8 +1505,36 @@ void SDKClient::StreamErgonomicsAsJSON()
 			if (f > 0) std::cout << ",";
 			std::cout << std::fixed << std::setprecision(2) << p_Ergo.data[p_Offset + f * 4];
 		}
-		std::cout << "],\"wrist_pos\":[0,0,0],\"wrist_quat\":[1,0,0,0]";
+
+		// Add raw skeleton node positions if available
+		bool t_HasSkeleton = false;
+		if (m_RawSkeleton != nullptr)
+		{
+			for (size_t s = 0; s < m_RawSkeleton->skeletons.size(); s++)
+			{
+				if (m_RawSkeleton->skeletons[s].info.gloveId == p_GloveID)
+				{
+					auto& t_Nodes = m_RawSkeleton->skeletons[s].nodes;
+					std::cout << ",\"skeleton\":[";
+					for (size_t n = 0; n < t_Nodes.size(); n++)
+					{
+						if (n > 0) std::cout << ",";
+						auto& t = t_Nodes[n].transform;
+						std::cout << "[" << std::fixed << std::setprecision(4)
+							<< t.position.x << "," << t.position.y << "," << t.position.z
+							<< "," << t.rotation.w << "," << t.rotation.x
+							<< "," << t.rotation.y << "," << t.rotation.z << "]";
+					}
+					std::cout << "]";
+					t_HasSkeleton = true;
+					break;
+				}
+			}
+		}
+
+		std::cout << ",\"wrist_pos\":[0,0,0],\"wrist_quat\":[1,0,0,0]";
 		std::cout << ",\"tracking\":true";
+		std::cout << ",\"has_skeleton\":" << (t_HasSkeleton ? "true" : "false");
 		std::cout << ",\"timestamp\":" << std::fixed << std::setprecision(3) << t_Timestamp;
 		std::cout << "}" << std::endl;
 	};
