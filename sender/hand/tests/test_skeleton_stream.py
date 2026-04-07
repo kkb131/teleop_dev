@@ -62,43 +62,67 @@ def main():
             raw = proc.stdout.readline()
             if not raw:
                 break
-            line = ANSI_RE.sub('', raw.decode('utf-8', errors='replace')).strip()
+            raw_str = raw.decode('utf-8', errors='replace')
+            cleaned = ANSI_RE.sub('', raw_str).strip()
 
             # Save first 20 raw lines
             if len(raw_lines) < 20:
-                raw_lines.append(repr(raw.decode('utf-8', errors='replace').rstrip()))
+                raw_lines.append(repr(raw_str.rstrip()))
 
-            if not line or not line.startswith("{"):
+            if not cleaned:
                 stats["non_json"] += 1
                 continue
 
-            try:
-                pkt = json.loads(line)
-            except json.JSONDecodeError:
-                stats["parse_errors"] += 1
+            # Split multiple JSON objects on one line (ANSI cursor reset merges lines)
+            # Find all top-level { ... } JSON objects
+            json_strs = []
+            depth = 0
+            start = -1
+            for i, ch in enumerate(cleaned):
+                if ch == '{':
+                    if depth == 0:
+                        start = i
+                    depth += 1
+                elif ch == '}':
+                    depth -= 1
+                    if depth == 0 and start >= 0:
+                        json_strs.append(cleaned[start:i+1])
+                        start = -1
+
+            if not json_strs:
+                stats["non_json"] += 1
                 continue
 
-            if pkt.get("type") != "manus":
-                continue
+            for js in json_strs:
+                try:
+                    pkt = json.loads(js)
+                except json.JSONDecodeError:
+                    stats["parse_errors"] += 1
+                    if stats["parse_errors"] <= 5:
+                        print(f"  [PARSE_ERR #{stats['parse_errors']}] {js[:120]}...")
+                    continue
 
-            stats["total"] += 1
-            hand = pkt.get("hand", "?")
-            has_skel = pkt.get("has_skeleton", False)
-            skel = pkt.get("skeleton")
-            node_count = len(skel) if isinstance(skel, list) else 0
+                if pkt.get("type") != "manus":
+                    continue
 
-            if hand == "left":
-                if has_skel:
-                    stats["left_skel_true"] += 1
-                    stats["left_nodes"].append(node_count)
-                else:
-                    stats["left_skel_false"] += 1
-            elif hand == "right":
-                if has_skel:
-                    stats["right_skel_true"] += 1
-                    stats["right_nodes"].append(node_count)
-                else:
-                    stats["right_skel_false"] += 1
+                stats["total"] += 1
+                hand = pkt.get("hand", "?")
+                has_skel = pkt.get("has_skeleton", False)
+                skel = pkt.get("skeleton")
+                node_count = len(skel) if isinstance(skel, list) else 0
+
+                if hand == "left":
+                    if has_skel:
+                        stats["left_skel_true"] += 1
+                        stats["left_nodes"].append(node_count)
+                    else:
+                        stats["left_skel_false"] += 1
+                elif hand == "right":
+                    if has_skel:
+                        stats["right_skel_true"] += 1
+                        stats["right_nodes"].append(node_count)
+                    else:
+                        stats["right_skel_false"] += 1
 
             # Progress
             if stats["total"] % 50 == 0:
