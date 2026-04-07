@@ -113,6 +113,21 @@ ClientReturnCode SDKClient::Run()
 			UpdateBeforeDisplayingData();
 			if (m_IsHeadless)
 			{
+				// Auto-load skeletons in headless mode (normally done via 'B'/'N' keys)
+				if (!m_SkeletonLoaded && (m_FirstLeftGloveID != 0 || m_FirstRightGloveID != 0))
+				{
+					if (m_FirstLeftGloveID != 0)
+					{
+						std::cerr << "[stream] Auto-loading left skeleton..." << std::endl;
+						LoadTestSkeleton(Side_Left);
+					}
+					if (m_FirstRightGloveID != 0)
+					{
+						std::cerr << "[stream] Auto-loading right skeleton..." << std::endl;
+						LoadTestSkeleton(Side_Right);
+					}
+					m_SkeletonLoaded = true;
+				}
 				StreamErgonomicsAsJSON();
 				t_Result = ClientReturnCode::ClientReturnCode_Success;
 			}

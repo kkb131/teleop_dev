@@ -270,6 +270,7 @@ protected:
 
 	bool m_RequestedExit = false;
 	bool m_IsHeadless = false;
+	bool m_SkeletonLoaded = false;
 	ConnectionType m_ConnectionType = ConnectionType::ConnectionType_Invalid;
 
 	//Console
