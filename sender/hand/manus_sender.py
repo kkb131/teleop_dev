@@ -166,12 +166,16 @@ def main():
                         choices=["subprocess", "ros2"],
                         help="SDK mode: subprocess=SDKClient binary, ros2=manus_ros2 topics (default: from config)")
     parser.add_argument("--retarget", default="none",
-                        choices=["none", "vector"],
-                        help="Retarget mode: none=raw angles, vector=optimization-based DG5F retarget")
+                        choices=["none", "vector", "direct"],
+                        help="Retarget mode: none=raw, vector=optimization, direct=angle mapping")
     parser.add_argument("--calibrate", action="store_true",
                         help="Calibrate baseline at startup (hold hand flat, fingers together)")
+    parser.add_argument("--calibrate-fist", action="store_true",
+                        help="Also calibrate fist for scale factors (direct mode)")
     parser.add_argument("--urdf", default=None,
-                        help="DG5F URDF path (for vector retarget)")
+                        help="DG5F URDF path (for retarget)")
+    parser.add_argument("--retarget-config", default=None,
+                        help="Retarget calibration config YAML (for direct mode)")
     args = parser.parse_args()
 
     # Load config
@@ -197,20 +201,22 @@ def main():
         reader = ManusReader(sdk_bin_path=sdk_path, hand_side=hand_side)
     reader.connect()
 
-    # Vector retarget setup
+    # Retarget setup
     retarget = None
-    if args.retarget == "vector":
+    if args.retarget != "none":
         import numpy as np
-        from sender.hand.vector_retarget import VectorRetarget
-        retarget = VectorRetarget(
+        from sender.hand.retarget import create_retarget
+        retarget = create_retarget(
+            mode=args.retarget,
             hand_side=hand_side if hand_side != "both" else "right",
             urdf_path=args.urdf,
+            config_path=args.retarget_config,
         )
-        print(f"[Sender] Vector retarget enabled ({hand_side})")
+        print(f"[Sender] Retarget: {args.retarget} ({hand_side})")
 
         if args.calibrate:
-            print("[Sender] Calibrating baseline — hold hand FLAT, fingers TOGETHER...")
-            print("[Sender] Waiting for skeleton data (3 seconds)...")
+            print("[Sender] Calibrating baseline — hold hand OPEN, fingers SPREAD...")
+            print("[Sender] Recording for 3 seconds...")
             time.sleep(1.0)
             samples = []
             cal_start = time.time()
@@ -222,10 +228,28 @@ def main():
             if samples:
                 baseline = np.mean(samples, axis=0)
                 retarget.calibrate_baseline(baseline)
-                print(f"[Sender] Skeleton baseline recorded ({len(samples)} samples)")
+                print(f"[Sender] Baseline recorded ({len(samples)} samples)")
             else:
-                print("[Sender] WARNING: No skeleton data! Is SDK built with skeleton support?")
-                print("[Sender] Continuing without baseline...")
+                print("[Sender] WARNING: No skeleton data!")
+
+        if args.calibrate_fist and hasattr(retarget, 'calibrate_fist_from_frames'):
+            print("[Sender] Now make a FIST — recording for 3 seconds...")
+            time.sleep(2.0)
+            samples = []
+            cal_start = time.time()
+            while time.time() - cal_start < 3.0:
+                data = reader.get_hand_data()
+                if data is not None and data.skeleton is not None:
+                    samples.append(data.skeleton.copy())
+                time.sleep(0.016)
+            if samples:
+                retarget.calibrate_fist_from_frames(samples)
+                print(f"[Sender] Fist calibrated ({len(samples)} samples)")
+
+                # Save config for direct mode
+                if hasattr(retarget, 'save_config'):
+                    save_path = args.retarget_config or "sender/hand/retarget/config/direct_mapping.yaml"
+                    retarget.save_config(save_path)
 
     # Start keyboard listener
     kb = KeyboardState()

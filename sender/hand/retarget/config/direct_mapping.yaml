@@ -1,0 +1,88 @@
+# Direct Mapping config — baseline calibration
+#
+# baseline: open hand에서 측정된 raw human bone angles (radians)
+#           이 값을 빼면 open hand → 0°가 됨
+#           센싱 소스(phone/manus)에 따라 다르므로
+#           --calibrate로 자동 측정하거나 수동 입력
+#
+# scale_factors: DG5F ROM / human effective ROM
+#           baseline 뺀 후의 delta를 DG5F 각도로 변환
+#
+# offsets: 추가 보정값 (radians), 보통 0
+
+# 아래 baseline 값은 mock 데이터 기준 (실제 phone 사용 시 --calibrate로 재측정)
+baseline:
+  # Thumb: spread, MCP, PIP, DIP
+  - 0.0
+  - 0.0066    # ~152°
+  - 0.0055    # ~146°
+  - 0.00    # ~157°
+  # Index
+  - 0.0
+  - 0.00    # ~133°
+  - 0.00    # ~121°
+  - 0.00    # ~141°
+  # Middle
+  - 0.0
+  - 0.00    # ~121°
+  - 0.00    # ~106°
+  - 0.00    # ~131°
+  # Ring
+  - 0.0
+  - 0.00    # ~114°
+  - 0.00    # ~98°
+  - 0.00    # ~125°
+  # Pinky
+  - 0.0
+  - 0.00    # ~115°
+  - 0.00    # ~99°
+  - 0.00    # ~125°
+
+scale_factors:
+  # Thumb: spread, MCP, PIP, DIP
+  - 1.0
+  - 1.00
+  - 1.0
+  - 1.00
+  # Index
+  - 1.0
+  - 1.00
+  - 1.0
+  - 1.00
+  # Middle
+  - 1.0
+  - 1.00
+  - 1.0
+  - 1.00
+  # Ring
+  - 1.0
+  - 1.00
+  - 1.0
+  - 1.00
+  # Pinky
+  - 1.0
+  - 1.00
+  - 1.0
+  - 1.0
+
+offsets:
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
