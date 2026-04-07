@@ -1487,6 +1487,8 @@ void SDKClient::StreamErgonomicsAsJSON()
 			<< " R_ergoID=0x" << m_RightGloveErgoData.id
 			<< std::dec
 			<< " landscape=" << (m_Landscape != nullptr ? "yes" : "no")
+			<< " rawSkel=" << (m_RawSkeleton != nullptr ? std::to_string(m_RawSkeleton->skeletons.size()) : "null")
+			<< " skelLoaded=" << (m_SkeletonLoaded ? "yes" : "no")
 			<< std::endl;
 
 		// Also output to stdout as JSON (Python reads stdout reliably)
