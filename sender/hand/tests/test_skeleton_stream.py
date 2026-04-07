@@ -57,52 +57,69 @@ def main():
         "non_json": 0,
     }
     raw_lines = []
+    parse_err_lines = []
     t_start = time.time()
+    line_num = 0
 
     try:
         while stats["total"] < MAX_FRAMES and (time.time() - t_start) < TIMEOUT_S:
             raw = proc.stdout.readline()
             if not raw:
                 break
+            line_num += 1
+
             # Strip ANSI on raw bytes BEFORE decoding
             raw_clean = ANSI_BYTES_RE.sub(b'', raw)
             cleaned = raw_clean.decode('utf-8', errors='replace').strip()
 
-            # Save first 20 raw lines (original bytes for debug)
+            # Save first 20: raw bytes + cleaned result
             if len(raw_lines) < 20:
-                raw_lines.append(repr(raw.rstrip()))
+                raw_lines.append(
+                    f"[RAW  {line_num:3d}] {repr(raw[:100].rstrip())}\n"
+                    f"[CLEAN{line_num:3d}] {cleaned[:100]}"
+                )
 
             if not cleaned:
                 stats["non_json"] += 1
                 continue
 
-            # Split multiple JSON objects on one line (ANSI cursor reset merges lines)
-            # Find all top-level { ... } JSON objects
-            json_strs = []
-            depth = 0
-            start = -1
-            for i, ch in enumerate(cleaned):
-                if ch == '{':
-                    if depth == 0:
-                        start = i
-                    depth += 1
-                elif ch == '}':
-                    depth -= 1
-                    if depth == 0 and start >= 0:
-                        json_strs.append(cleaned[start:i+1])
-                        start = -1
+            # Try direct json.loads first (most common case after ANSI strip)
+            try:
+                pkt = json.loads(cleaned)
+                pkts = [pkt]
+            except json.JSONDecodeError:
+                # Fallback: split multiple JSON objects (ANSI cursor reset merges lines)
+                pkts = []
+                depth = 0
+                start = -1
+                for i, ch in enumerate(cleaned):
+                    if ch == '{':
+                        if depth == 0:
+                            start = i
+                        depth += 1
+                    elif ch == '}':
+                        depth -= 1
+                        if depth == 0 and start >= 0:
+                            try:
+                                pkts.append(json.loads(cleaned[start:i+1]))
+                            except json.JSONDecodeError:
+                                stats["parse_errors"] += 1
+                                if len(parse_err_lines) < 10:
+                                    snippet = cleaned[start:start+150]
+                                    # hex of first 30 bytes for hidden chars
+                                    hex_preview = raw_clean[:30].hex(' ')
+                                    parse_err_lines.append(
+                                        f"[ERR line={line_num}] json={snippet}...\n"
+                                        f"  hex(30B): {hex_preview}"
+                                    )
+                            start = -1
 
-            if not json_strs:
-                stats["non_json"] += 1
-                continue
+                if not pkts:
+                    stats["non_json"] += 1
+                    continue
 
-            for js in json_strs:
-                try:
-                    pkt = json.loads(js)
-                except json.JSONDecodeError:
-                    stats["parse_errors"] += 1
-                    if stats["parse_errors"] <= 5:
-                        print(f"  [PARSE_ERR #{stats['parse_errors']}] {js[:120]}...")
+            for pkt in pkts:
+                if not isinstance(pkt, dict):
                     continue
 
                 if pkt.get("type") != "manus":
@@ -138,12 +155,17 @@ def main():
         except subprocess.TimeoutExpired:
             proc.kill()
 
-    # Save raw dump
+    # Save dump with raw, clean, and parse error info
     dump_file = "skeleton_dump.txt"
     with open(dump_file, "w") as f:
-        for i, line in enumerate(raw_lines):
-            f.write(f"[{i:3d}] {line}\n")
-    print(f"\n[DUMP] First {len(raw_lines)} raw lines saved to {dump_file}")
+        f.write("=== RAW vs CLEAN (first 20 lines) ===\n")
+        for entry in raw_lines:
+            f.write(entry + "\n\n")
+        if parse_err_lines:
+            f.write(f"\n=== PARSE ERRORS (first {len(parse_err_lines)}) ===\n")
+            for entry in parse_err_lines:
+                f.write(entry + "\n\n")
+    print(f"\n[DUMP] Saved to {dump_file} ({len(raw_lines)} lines + {len(parse_err_lines)} errors)")
 
     # Print stderr
     stderr = proc.stderr.read().decode('utf-8', errors='replace')
