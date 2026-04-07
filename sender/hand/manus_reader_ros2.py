@@ -43,22 +43,25 @@ from sender.hand.manus_reader import (
 # Ergonomics type string → joint index mapping
 # SDK publishes ergonomics with type strings (e.g., "ThumbCMCSpread", "IndexMCPFlexion")
 # We map these to our 20-joint array: [Thumb(spread,MCP,PIP,DIP), Index(...), ...]
+# Actual type strings from manus_ros2 (confirmed by user):
+# ThumbMCPSpread, ThumbMCPStretch, ThumbPIPStretch, ThumbDIPStretch,
+# IndexSpread, IndexMCPStretch, IndexPIPStretch, IndexDIPStretch, ...
 _ERGO_TYPE_MAP = {
     # Thumb (0-3)
-    "ThumbCMCSpread": 0, "ThumbCMCFlexion": 1,
-    "ThumbMCPFlexion": 2, "ThumbIPFlexion": 3,
+    "ThumbMCPSpread": 0, "ThumbMCPStretch": 1,
+    "ThumbPIPStretch": 2, "ThumbDIPStretch": 3,
     # Index (4-7)
-    "IndexFingerMCPSpread": 4, "IndexFingerMCPFlexion": 5,
-    "IndexFingerPIPFlexion": 6, "IndexFingerDIPFlexion": 7,
+    "IndexSpread": 4, "IndexMCPStretch": 5,
+    "IndexPIPStretch": 6, "IndexDIPStretch": 7,
     # Middle (8-11)
-    "MiddleFingerMCPSpread": 8, "MiddleFingerMCPFlexion": 9,
-    "MiddleFingerPIPFlexion": 10, "MiddleFingerDIPFlexion": 11,
+    "MiddleSpread": 8, "MiddleMCPStretch": 9,
+    "MiddlePIPStretch": 10, "MiddleDIPStretch": 11,
     # Ring (12-15)
-    "RingFingerMCPSpread": 12, "RingFingerMCPFlexion": 13,
-    "RingFingerPIPFlexion": 14, "RingFingerDIPFlexion": 15,
+    "RingSpread": 12, "RingMCPStretch": 13,
+    "RingPIPStretch": 14, "RingDIPStretch": 15,
     # Pinky (16-19)
-    "PinkyFingerMCPSpread": 16, "PinkyFingerMCPFlexion": 17,
-    "PinkyFingerPIPFlexion": 18, "PinkyFingerDIPFlexion": 19,
+    "PinkySpread": 16, "PinkyMCPStretch": 17,
+    "PinkyPIPStretch": 18, "PinkyDIPStretch": 19,
 }
 
 
