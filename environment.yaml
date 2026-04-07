@@ -25,3 +25,5 @@ dependencies:
     - pynput>=1.7.6         # 키보드 입력 (vive_sender KeyboardStateTracker)
     - pyyaml>=6.0           # Vive/Manus config 파싱
     - pygame>=2.0.0         # 조이스틱/게임패드 입력 (joystick_sender)
+    - scipy>=1.10.0         # 벡터 retarget 최적화 (manus_sender --retarget vector)
+    - pinocchio>=3.0.0      # DG5F FK (manus_sender --retarget vector)
