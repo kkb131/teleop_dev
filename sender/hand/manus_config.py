@@ -32,6 +32,7 @@ class JointMappingConfig:
 @dataclass
 class SdkConfig:
     bin_path: str = "sender/hand/sdk/SDKClient_Linux/SDKClient_Linux.out"
+    mode: str = "subprocess"  # "subprocess" or "ros2"
 
 
 @dataclass

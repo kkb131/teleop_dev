@@ -13,3 +13,4 @@ joint_mapping:
 
 sdk:
   bin_path: "sender/hand/sdk/SDKClient_Linux/SDKClient_Linux.out"
+  mode: "ros2"  # "subprocess" (SDKClient binary) or "ros2" (manus_data_publisher)

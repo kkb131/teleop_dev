@@ -162,6 +162,9 @@ def main():
                         help="Which hand(s) to stream (overrides config)")
     parser.add_argument("--sdk-path", default=None,
                         help="Path to SDKClient_Linux.out (overrides config)")
+    parser.add_argument("--sdk-mode", default=None,
+                        choices=["subprocess", "ros2"],
+                        help="SDK mode: subprocess=SDKClient binary, ros2=manus_ros2 topics (default: from config)")
     parser.add_argument("--retarget", default="none",
                         choices=["none", "vector"],
                         help="Retarget mode: none=raw angles, vector=optimization-based DG5F retarget")
@@ -180,13 +183,18 @@ def main():
     hz = args.hz or cfg.network.hz
     hand_side = args.hand or cfg.hand.side
     sdk_path = args.sdk_path or cfg.sdk.bin_path
+    sdk_mode = args.sdk_mode or cfg.sdk.mode
 
     if target_ip is None:
         print("[ERROR] --target-ip required (or set network.target_ip in config)")
         return
 
     # Connect to gloves
-    reader = ManusReader(sdk_bin_path=sdk_path, hand_side=hand_side)
+    if sdk_mode == "ros2":
+        from sender.hand.manus_reader_ros2 import ManusReaderROS2
+        reader = ManusReaderROS2(hand_side=hand_side)
+    else:
+        reader = ManusReader(sdk_bin_path=sdk_path, hand_side=hand_side)
     reader.connect()
 
     # Vector retarget setup
@@ -230,7 +238,7 @@ def main():
     send_count = 0
     lost_count = 0
 
-    print(f"\n[Sender] Config: hand={hand_side}, sdk={sdk_path}")
+    print(f"\n[Sender] Config: hand={hand_side}, sdk_mode={sdk_mode}")
     print(f"[Sender] Retarget: {args.retarget}")
     print(f"[Sender] Sending to {target_ip}:{port} at {hz} Hz")
     print("[Sender] Press Ctrl+C or Q to stop.\n")
