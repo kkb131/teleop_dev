@@ -39,7 +39,7 @@ conda activate teleop_operator
 | pyyaml | YAML 설정 파싱 |
 | pygame | 조이스틱/게임패드 입력 |
 | scipy | 벡터 retarget 최적화 (manus_sender --retarget vector) |
-| pinocchio | DG5F FK (manus_sender --retarget vector) |
+| pin (pinocchio) | DG5F FK — `pip install pin` (NOT `pip install pinocchio`) |
 | libusb | Manus SDK 의존 |
 
 ### 1.3 SteamVR 설정 (Vive Tracker 사용 시)
@@ -252,7 +252,7 @@ python3 -m robot.arm.admittance.main --mode rtde --input unified --robot-ip 192.
 | pyyaml | pip | YAML 설정 파싱 |
 | pygame | pip | 조이스틱 입력 |
 | scipy | pip | 벡터 retarget 최적화 (--retarget vector) |
-| pinocchio | pip/conda | DG5F FK (--retarget vector) |
+| pin (pinocchio) | pip (`pip install pin`) | DG5F FK (--retarget vector) |
 | libusb | apt/conda | Manus SDK |
 
 ### 로봇 PC (robot/)
