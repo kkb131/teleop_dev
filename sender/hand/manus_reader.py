@@ -50,7 +50,8 @@ NUM_JOINTS = NUM_FINGERS * JOINTS_PER_FINGER  # 20
 DEFAULT_SDK_BIN = "sender/hand/sdk/SDKClient_Linux/SDKClient_Linux.out"
 
 # Strip ANSI escape sequences (e.g. \x1b[0;1H cursor moves from C++ binary)
-_ANSI_RE = re.compile(r'\x1b\[[0-9;]*[A-Za-z]')
+# Strip ANSI on raw bytes BEFORE decoding — SDK injects \x1b[0;1H mid-JSON
+_ANSI_BYTES_RE = re.compile(rb'\x1b\[[0-9;]*[A-Za-z]')
 
 
 # ─────────────────────────────────────────────────────────
@@ -246,7 +247,7 @@ class ManusReader:
                 raw_line = self._proc.stdout.readline()
                 if not raw_line:
                     break
-                line = _ANSI_RE.sub('', raw_line.decode(errors="replace")).strip()
+                line = _ANSI_BYTES_RE.sub(b'', raw_line).decode(errors="replace").strip()
 
                 if not line or not line.startswith("{"):
                     continue

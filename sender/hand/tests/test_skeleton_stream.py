@@ -17,7 +17,9 @@ import subprocess
 import sys
 import time
 
-ANSI_RE = re.compile(r'\x1b\[[0-9;]*[A-Za-z]')
+# Strip ANSI on raw bytes BEFORE decoding — critical for skeleton JSON
+# where ANSI codes can appear mid-JSON and corrupt parsing
+ANSI_BYTES_RE = re.compile(rb'\x1b\[[0-9;]*[A-Za-z]')
 SDK_BIN = "sender/hand/sdk/SDKClient_Linux/SDKClient_Linux.out"
 SDK_DIR = "sender/hand/sdk/SDKClient_Linux"
 LIB_DIR = os.path.join(SDK_DIR, "ManusSDK", "lib")
@@ -62,12 +64,13 @@ def main():
             raw = proc.stdout.readline()
             if not raw:
                 break
-            raw_str = raw.decode('utf-8', errors='replace')
-            cleaned = ANSI_RE.sub('', raw_str).strip()
+            # Strip ANSI on raw bytes BEFORE decoding
+            raw_clean = ANSI_BYTES_RE.sub(b'', raw)
+            cleaned = raw_clean.decode('utf-8', errors='replace').strip()
 
-            # Save first 20 raw lines
+            # Save first 20 raw lines (original bytes for debug)
             if len(raw_lines) < 20:
-                raw_lines.append(repr(raw_str.rstrip()))
+                raw_lines.append(repr(raw.rstrip()))
 
             if not cleaned:
                 stats["non_json"] += 1
