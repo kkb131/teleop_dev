@@ -149,15 +149,21 @@ class ManusReceiver:
 # ─────────────────────────────────────────────────────────
 
 def _print_status(data: HandData, dg5f_angles: np.ndarray, hz: float,
-                  pkt_count: int, frame: int):
+                  pkt_count: int, frame: int, is_retargeted: bool = False):
     """Print compact status to terminal."""
     if frame > 0:
         # Move cursor up to overwrite
-        print(f"\033[8A", end="")
+        print(f"\033[9A", end="")
 
+    mode_str = "VECTOR (bypass)" if is_retargeted else "RAW (retarget)"
     print(f"  Frame: {frame:6d} | Pkts: {pkt_count:6d} | Rate: {hz:.1f} Hz")
-    print(f"  Hand: {data.hand_side.upper()} | Tracking: True")
-    print(f"  {'Finger':8s} {'Manus':>8s} {'DG5F':>8s} {'Manus':>8s} {'DG5F':>8s} {'Manus':>8s} {'DG5F':>8s} {'Manus':>8s} {'DG5F':>8s}")
+    print(f"  Hand: {data.hand_side.upper()} | Mode: {mode_str}")
+
+    if is_retargeted:
+        col1, col2 = "Recv", "Output"
+    else:
+        col1, col2 = "Manus", "DG5F"
+    print(f"  {'Finger':8s} {col1:>8s} {col2:>8s} {col1:>8s} {col2:>8s} {col1:>8s} {col2:>8s} {col1:>8s} {col2:>8s}")
 
     finger_names = ["Thumb", "Index", "Middle", "Ring", "Pinky"]
     for f in range(5):
@@ -309,7 +315,8 @@ def main():
                     hz_count = 0
                     hz_timer = now
 
-                _print_status(data, dg5f_angles, loop_hz, receiver.packet_count, frame)
+                _print_status(data, dg5f_angles, loop_hz, receiver.packet_count, frame,
+                              is_retargeted=receiver.is_retargeted)
                 frame += 1
             else:
                 # No new data — check for timeout

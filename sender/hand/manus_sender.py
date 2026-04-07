@@ -285,8 +285,13 @@ def main():
                 sock.sendto(raw, target)
 
             send_count += 1
-            if send_count % (hz * 5) == 0:
-                print(f"[Sender] Sent {send_count} packets")
+            # Status display every 0.5s
+            if send_count % max(1, int(hz * 0.5)) == 0:
+                mode_str = "VECTOR" if (retarget is not None) else "RAW"
+                flag_str = "retargeted=True" if pkt.get("retargeted") else "retargeted=False"
+                angles = pkt.get("joint_angles", [])
+                preview = " ".join(f"{a:+6.2f}" for a in angles[:5])
+                print(f"\r[SEND] #{send_count} mode={mode_str} {flag_str} angles[0:5]=[{preview}]", end="", flush=True)
 
             elapsed = time.perf_counter() - t_start
             remaining = dt - elapsed
