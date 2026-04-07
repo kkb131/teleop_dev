@@ -153,7 +153,7 @@ def _print_status(data: HandData, dg5f_angles: np.ndarray, hz: float,
     """Print compact status to terminal."""
     if frame > 0:
         # Move cursor up to overwrite
-        print(f"\033[9A", end="")
+        print(f"\033[8A", end="")
 
     mode_str = "VECTOR (bypass)" if is_retargeted else "RAW (retarget)"
     print(f"  Frame: {frame:6d} | Pkts: {pkt_count:6d} | Rate: {hz:.1f} Hz")
