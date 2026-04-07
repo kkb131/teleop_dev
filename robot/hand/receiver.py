@@ -159,11 +159,10 @@ def _print_status(data: HandData, dg5f_angles: np.ndarray, hz: float,
     print(f"  Frame: {frame:6d} | Pkts: {pkt_count:6d} | Rate: {hz:.1f} Hz")
     print(f"  Hand: {data.hand_side.upper()} | Mode: {mode_str}")
 
-    if is_retargeted:
-        col1, col2 = "Recv", "Output"
-    else:
-        col1, col2 = "Manus", "DG5F"
-    print(f"  {'Finger':8s} {col1:>8s} {col2:>8s} {col1:>8s} {col2:>8s} {col1:>8s} {col2:>8s} {col1:>8s} {col2:>8s}")
+    ab = ("R", "O") if is_retargeted else ("M", "D")
+    joint_labels = ["Spread", "MCP", "PIP", "DIP"]
+    header_parts = [f"{jl:>5s}({ab[0]}/{ab[1]})" for jl in joint_labels]
+    print(f"  {'Finger':8s} {'  '.join(header_parts)}")
 
     finger_names = ["Thumb", "Index", "Middle", "Ring", "Pinky"]
     for f in range(5):
@@ -172,8 +171,8 @@ def _print_status(data: HandData, dg5f_angles: np.ndarray, hz: float,
         for j in range(4):
             m_val = data.joint_angles[b + j]
             d_val = dg5f_angles[b + j]
-            parts.append(f"{m_val:+7.3f} {d_val:+7.3f}")
-        print(f"  {finger_names[f]:8s} {' '.join(parts)}")
+            parts.append(f"{m_val:+6.2f}/{d_val:+6.2f}")
+        print(f"  {finger_names[f]:8s} {'  '.join(parts)}")
 
 
 def main():

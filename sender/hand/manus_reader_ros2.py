@@ -40,10 +40,26 @@ from sender.hand.manus_reader import (
     FINGER_NAMES, JOINT_NAMES_PER_FINGER,
 )
 
-# Ergonomics type strings from manus_ros2 (in order per finger)
-# Each finger has: Spread, Stretch (MCP), Stretch (PIP), Stretch (DIP)
-# The SDK publishes them with type strings like "ThumbCMCSpread", "ThumbMCPFlexion", etc.
-# We map by index: ergonomics array is 20 values ordered as SDK delivers them.
+# Ergonomics type string → joint index mapping
+# SDK publishes ergonomics with type strings (e.g., "ThumbCMCSpread", "IndexMCPFlexion")
+# We map these to our 20-joint array: [Thumb(spread,MCP,PIP,DIP), Index(...), ...]
+_ERGO_TYPE_MAP = {
+    # Thumb (0-3)
+    "ThumbCMCSpread": 0, "ThumbCMCFlexion": 1,
+    "ThumbMCPFlexion": 2, "ThumbIPFlexion": 3,
+    # Index (4-7)
+    "IndexFingerMCPSpread": 4, "IndexFingerMCPFlexion": 5,
+    "IndexFingerPIPFlexion": 6, "IndexFingerDIPFlexion": 7,
+    # Middle (8-11)
+    "MiddleFingerMCPSpread": 8, "MiddleFingerMCPFlexion": 9,
+    "MiddleFingerPIPFlexion": 10, "MiddleFingerDIPFlexion": 11,
+    # Ring (12-15)
+    "RingFingerMCPSpread": 12, "RingFingerMCPFlexion": 13,
+    "RingFingerPIPFlexion": 14, "RingFingerDIPFlexion": 15,
+    # Pinky (16-19)
+    "PinkyFingerMCPSpread": 16, "PinkyFingerMCPFlexion": 17,
+    "PinkyFingerPIPFlexion": 18, "PinkyFingerDIPFlexion": 19,
+}
 
 
 class ManusReaderROS2:
@@ -162,18 +178,27 @@ class ManusReaderROS2:
             if self._hand_side != "both" and hand_side != self._hand_side:
                 return
 
-            # Ergonomics → joint_angles (degrees → radians)
+            # Ergonomics → joint_angles (degrees → radians) using type string mapping
             joint_angles = np.zeros(NUM_JOINTS, dtype=np.float32)
-            for i, ergo in enumerate(msg.ergonomics):
-                if i < NUM_JOINTS:
-                    joint_angles[i] = np.deg2rad(ergo.value)
+            unmapped_types = []
+            for ergo in msg.ergonomics:
+                idx = _ERGO_TYPE_MAP.get(ergo.type)
+                if idx is not None:
+                    joint_angles[idx] = np.deg2rad(ergo.value)
+                else:
+                    unmapped_types.append(ergo.type)
+
+            # Log unmapped types once
+            if unmapped_types and self._line_count == 0:
+                print(f"[ManusROS2] Unmapped ergo types: {unmapped_types}")
+                print(f"[ManusROS2] All ergo types received: "
+                      f"{[e.type for e in msg.ergonomics]}")
 
             # Finger spread (indices 0, 4, 8, 12, 16)
-            finger_spread = np.zeros(NUM_FINGERS, dtype=np.float32)
-            for f in range(NUM_FINGERS):
-                spread_idx = f * JOINTS_PER_FINGER
-                if spread_idx < len(msg.ergonomics):
-                    finger_spread[f] = np.deg2rad(msg.ergonomics[spread_idx].value)
+            finger_spread = np.array([
+                joint_angles[0], joint_angles[4], joint_angles[8],
+                joint_angles[12], joint_angles[16]
+            ], dtype=np.float32)
 
             # Raw skeleton → ndarray[N, 7] (x, y, z, qw, qx, qy, qz)
             skeleton = None
