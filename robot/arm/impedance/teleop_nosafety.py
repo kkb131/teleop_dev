@@ -10,7 +10,7 @@ Torque saturation (clip to TORQUE_LIMITS) is always applied.
 Usage:
   python3 -m robot.arm.impedance.teleop_nosafety --robot-ip 192.168.0.2
   python3 -m robot.arm.impedance.teleop_nosafety --robot-ip 192.168.0.2 --preset MEDIUM
-  python3 -m robot.arm.impedance.teleop_nosafety --robot-ip 192.168.0.2 --input xbox
+  python3 -m robot.arm.impedance.teleop_nosafety --robot-ip 192.168.0.2 --input unified
 """
 
 import argparse
@@ -44,15 +44,6 @@ HELP_KEYBOARD = """\
   ESC/x : Quit
 ===================================="""
 
-HELP_JOYSTICK = """\
-=== Impedance Teleop (No Safety) ===
-  L-Stick : XY move    R-Stick : Roll/Pitch
-  LT/RT   : Down/Up    LB/RB   : Yaw -/+
-  D-pad U/D : Speed +/-  D-pad L/R : Tool Z +/-
-  B : Cycle Stiff/Medium/Soft preset
-  [/]   : Gain scale down/up
-  START : Reset   BACK : Quit   Logo : E-Stop
-======================================"""
 
 
 def apply_rotation_delta(
@@ -83,7 +74,7 @@ def main():
     parser.add_argument("--robot-ip", required=True)
     parser.add_argument("--preset", default="SOFT", choices=list(IMPEDANCE_PRESETS.keys()))
     parser.add_argument("--hz", type=float, default=125.0)
-    parser.add_argument("--input", choices=["keyboard", "xbox", "network"], default="keyboard")
+    parser.add_argument("--input", choices=["keyboard", "unified"], default="keyboard")
     parser.add_argument("--no-coriolis", action="store_true")
     parser.add_argument("--config", type=str, default=None)
     args = parser.parse_args()
@@ -112,21 +103,11 @@ def main():
         config.filter.alpha_position, config.filter.alpha_orientation
     )
 
-    # Input handler (network mode uses separate, lower velocity scales)
-    if args.input == "network":
-        lin_scale = config.input.network_linear_scale
-        ang_scale = config.input.network_angular_scale
-    else:
-        lin_scale = config.input.xbox_linear_scale
-        ang_scale = config.input.xbox_angular_scale
-
     input_handler = create_input(
         args.input,
         cartesian_step=config.input.cartesian_step,
         rotation_step=config.input.rotation_step,
-        linear_scale=lin_scale,
-        angular_scale=ang_scale,
-        network_port=config.input.network_port,
+        unified_port=config.input.unified_port,
     )
 
     # Connect to robot
@@ -154,8 +135,7 @@ def main():
     print(f"[NoSafety] Initial EE: x={ee_pos[0]:.4f} y={ee_pos[1]:.4f} z={ee_pos[2]:.4f}")
     print(f"[NoSafety] Kp={impedance.Kp}")
     print(f"[NoSafety] Kd={impedance.Kd}")
-    help_text = HELP_KEYBOARD if args.input == "keyboard" else HELP_JOYSTICK
-    print(help_text)
+    print(HELP_KEYBOARD)
 
     # Wait for URScript startup
     print("[NoSafety] Waiting 1s for URScript to initialize...")

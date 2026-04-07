@@ -10,7 +10,7 @@ UR10e 어드미턴스 원격조종 프로그램의 설치부터 실행, 조작, 
 2. [사전 준비](#2-사전-준비)
 3. [빠른 시작 (첫 실행)](#3-빠른-시작-첫-실행)
 4. [키보드 조작법](#4-키보드-조작법)
-5. [Xbox 컨트롤러 조작법](#5-xbox-컨트롤러-조작법)
+5. [Unified 입력 (원격 sender)](#5-unified-입력-원격-sender)
 6. [어드미턴스 (F/T) 사용법](#6-어드미턴스-ft-사용법)
 7. [안전 시스템](#7-안전-시스템)
 8. [실제 로봇 연결](#8-실제-로봇-연결)
@@ -21,7 +21,7 @@ UR10e 어드미턴스 원격조종 프로그램의 설치부터 실행, 조작, 
 
 ## 1. 개요
 
-이 프로그램은 키보드 또는 Xbox 컨트롤러로 UR10e 로봇의 엔드이펙터(EE)를 실시간으로 움직이는 **원격조종(Teleop)** 도구입니다. 선택적으로 F/T(힘/토크) 센서 기반 **어드미턴스 제어**를 활성화하면, 외부에서 로봇을 손으로 밀어서 움직이는 것도 가능합니다.
+이 프로그램은 키보드 또는 Unified 프로토콜(Vive/키보드 sender)로 UR10e 로봇의 엔드이펙터(EE)를 실시간으로 움직이는 **원격조종(Teleop)** 도구입니다. 선택적으로 F/T(힘/토크) 센서 기반 **어드미턴스 제어**를 활성화하면, 외부에서 로봇을 손으로 밀어서 움직이는 것도 가능합니다.
 
 **두 가지 모드**:
 - **sim 모드**: 실제 로봇 없이 시뮬레이션으로 테스트 (ROS2 mock hardware 사용)
@@ -101,7 +101,7 @@ ros2 launch ur_robot_driver ur10e.launch.py use_fake_hardware:=true robot_ip:=0.
 다른 터미널에서:
 
 ```bash
-cd /workspaces/tamp_ws/src/tamp_dev
+cd /workspaces/tamp_ws/src/teleop_dev
 python3 -m robot.arm.admittance.main --mode sim --input keyboard
 ```
 
@@ -180,37 +180,20 @@ python3 -m robot.arm.admittance.main --mode sim --input keyboard
 
 ---
 
-## 5. Xbox 컨트롤러 조작법
+## 5. Unified 입력 (원격 sender)
+
+Operator PC에서 Vive Tracker, 키보드, 조이스틱 sender가 UDP로 보내는 절대 포즈를 수신합니다.
 
 ```bash
-# Xbox 컨트롤러로 실행
-python3 -m robot.arm.admittance.main --mode sim --input xbox
+# Unified 프로토콜로 실행 (operator PC의 sender가 UDP 9871로 전송)
+python3 -m robot.arm.admittance.main --mode rtde --input unified --robot-ip 192.168.0.2
 ```
 
-### 스틱 / 트리거
+- Operator PC에서 sender 실행: `python3 -m sender.arm.vive_sender --target-ip <ROBOT_PC_IP>`
+- 버튼 매핑은 sender 측에서 처리 (E-Stop, Reset, 속도 조절, 어드미턴스 프리셋 등)
+- 로봇 PC는 수신만 하며, sender 시작 시 현재 TCP 포즈를 자동 응답
 
-| 입력 | 동작 |
-|------|------|
-| 왼쪽 스틱 ← → | 좌/우 이동 (X) |
-| 왼쪽 스틱 ↑ ↓ | 앞/뒤 이동 (Y) |
-| LT / RT (왼쪽/오른쪽 트리거) | 아래/위 이동 (Z) |
-| 오른쪽 스틱 ← → | Roll 회전 |
-| 오른쪽 스틱 ↑ ↓ | Pitch 회전 |
-| LB / RB (범퍼) | Yaw - / + |
-
-### 버튼
-
-| 버튼 | 동작 |
-|------|------|
-| D-pad ↑ / ↓ | 속도 올리기/내리기 |
-| D-pad ← / → | 도구 Z축 이동 (C/V 키와 동일) |
-| `B` | 어드미턴스 프리셋 순환 (STIFF → MEDIUM → SOFT → ...) |
-| `Y` | F/T 센서 영점 보정 |
-| `START` | E-Stop 해제 + 초기화 |
-| `BACK` | 프로그램 종료 |
-| Xbox 로고 버튼 | **E-Stop** (비상 정지) |
-
-> **참고**: Xbox 모드에서는 어드미턴스가 항상 활성화됩니다 (별도 토글 없음). `B` 버튼으로 프리셋만 순환합니다.
+> **참고**: Unified 모드에서는 입력이 절대 포즈(absolute pose)로 전달되므로, 키보드 모드의 누적 방식과 다릅니다.
 
 ---
 
@@ -252,8 +235,8 @@ python3 -m robot.arm.admittance.main --mode sim --input xbox
 
 | 동작 | 키 |
 |------|-----|
-| **E-Stop 발동** | `Space` (키보드) / Xbox 로고 (컨트롤러) |
-| **E-Stop 해제** | `R` (키보드) / `START` (컨트롤러) |
+| **E-Stop 발동** | `Space` (키보드) / sender 측 E-Stop 버튼 |
+| **E-Stop 해제** | `R` (키보드) / sender 측 Reset 버튼 |
 
 E-Stop을 발동하면 로봇이 즉시 정지하고, 어떤 입력도 무시됩니다. 해제하면 현재 위치에서 다시 제어가 시작됩니다.
 
@@ -287,7 +270,7 @@ sim 모드에서 충분히 연습한 후, 실제 로봇에 연결하세요.
 ### 실행
 
 ```bash
-cd /workspaces/tamp_ws/src/tamp_dev
+cd /workspaces/tamp_ws/src/teleop_dev
 
 # 기본 IP (192.168.0.2)
 python3 -m robot.arm.admittance.main --mode rtde --input keyboard
@@ -382,19 +365,16 @@ pip install "numpy<2"
 ### 자주 사용하는 실행 명령어 모음
 
 ```bash
-cd /workspaces/tamp_ws/src/tamp_dev
+cd /workspaces/tamp_ws/src/teleop_dev
 
 # sim + 키보드 (기본, 처음 시작할 때)
 python3 -m robot.arm.admittance.main --mode sim --input keyboard
 
-# sim + Xbox
-python3 -m robot.arm.admittance.main --mode sim --input xbox
-
 # 실제 로봇 + 키보드
 python3 -m robot.arm.admittance.main --mode rtde --input keyboard --robot-ip 192.168.0.2
 
-# 실제 로봇 + Xbox + 로깅
-python3 -m robot.arm.admittance.main --mode rtde --input xbox --robot-ip 192.168.0.2 --log
+# 실제 로봇 + unified (operator PC sender 수신) + 로깅
+python3 -m robot.arm.admittance.main --mode rtde --input unified --robot-ip 192.168.0.2 --log
 
 # 커스텀 설정 파일 사용
 python3 -m robot.arm.admittance.main --config robot/arm/admittance/config/my_config.yaml

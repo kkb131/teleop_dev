@@ -53,18 +53,6 @@ HELP_KEYBOARD = """\
   [/]   : Gain scale down/up
 ============================================"""
 
-HELP_JOYSTICK = """\
-=== UR10e Impedance Teleop (URScript PD) ===
-  L-Stick : XY move    R-Stick : Roll/Pitch
-  LT/RT   : Down/Up    LB/RB   : Yaw -/+
-  D-pad U/D : Speed +/-  D-pad L/R : Tool Z +/-
-  Space/Logo : E-Stop   START : Reset
-  BACK : Quit
-  --- Impedance ---
-  B : Cycle Stiff/Medium/Soft preset
-  [/]   : Gain scale down/up
-============================================"""
-
 STATUS_LINES = 8
 
 
@@ -94,11 +82,9 @@ class ImpedanceTeleopController:
     URScript side (500Hz): PD torque = Kp*(q_d - q) - Kd*qd + C(q,qd)
     """
 
-    def __init__(self, config: ImpedanceConfig, log_path: Optional[str] = None,
-                 extra_input_kwargs: dict | None = None):
+    def __init__(self, config: ImpedanceConfig, log_path: Optional[str] = None):
         self.config = config
         self.running = True
-        self._extra_input_kwargs = extra_input_kwargs or {}
 
         # Modules
         self.input_handler: Optional[InputHandler] = None
@@ -240,37 +226,11 @@ class ImpedanceTeleopController:
         """Main entry point — dispatches to RTDE or sim mode."""
         cfg = self.config
 
-        # Network mode uses separate, lower velocity scales
-        if cfg.input.type == "network":
-            lin_scale = cfg.input.network_linear_scale
-            ang_scale = cfg.input.network_angular_scale
-        else:
-            lin_scale = cfg.input.xbox_linear_scale
-            ang_scale = cfg.input.xbox_angular_scale
-
-        vive_kwargs = {
-            "vive_port": cfg.input.vive_port,
-            "vive_linear_scale": cfg.input.vive_linear_scale,
-            "vive_angular_scale": cfg.input.vive_angular_scale,
-            "vive_deadzone": cfg.input.vive_deadzone,
-            "calibration_file": cfg.input.vive_calibration_file,
-        }
-        vive_kwargs.update(self._extra_input_kwargs)  # CLI overrides
-
-        # Unified input: pose_provider set later after IK init
-        unified_kwargs = {
-            "unified_port": cfg.input.unified_port,
-        }
-
         self.input_handler = create_input(
             cfg.input.type,
             cartesian_step=cfg.input.cartesian_step,
             rotation_step=cfg.input.rotation_step,
-            linear_scale=lin_scale,
-            angular_scale=ang_scale,
-            network_port=cfg.input.network_port,
-            **vive_kwargs,
-            **unified_kwargs,
+            unified_port=cfg.input.unified_port,
         )
 
         dt = cfg.dt
@@ -319,8 +279,7 @@ class ImpedanceTeleopController:
 
         print(f"[ImpedanceTeleop] Initial EE: x={self.ee_pos[0]:.4f} "
               f"y={self.ee_pos[1]:.4f} z={self.ee_pos[2]:.4f}")
-        help_text = HELP_KEYBOARD if self.config.input.type == "keyboard" else HELP_JOYSTICK
-        print(help_text)
+        print(HELP_KEYBOARD)
         for _ in range(STATUS_LINES):
             print()
 
@@ -369,8 +328,7 @@ class ImpedanceTeleopController:
             print(f"[ImpedanceTeleop] Initial EE: x={self.ee_pos[0]:.4f} "
                   f"y={self.ee_pos[1]:.4f} z={self.ee_pos[2]:.4f}")
             print("[ImpedanceTeleop] Sim mode: position fallback (no torque)")
-            help_text = HELP_KEYBOARD if self.config.input.type == "keyboard" else HELP_JOYSTICK
-            print(help_text)
+            print(HELP_KEYBOARD)
             for _ in range(STATUS_LINES):
                 print()
 
@@ -643,12 +601,8 @@ def main():
     parser = argparse.ArgumentParser(description="UR10e Impedance Teleop Control")
     parser.add_argument("--mode", choices=["sim", "rtde"], default=None,
                         help="Backend mode (overrides config)")
-    parser.add_argument("--input", choices=["keyboard", "xbox", "network", "vive", "unified"], default=None,
+    parser.add_argument("--input", choices=["keyboard", "unified"], default=None,
                         help="Input device (overrides config)")
-    parser.add_argument("--vive-port", type=int, default=9871,
-                        help="UDP port for Vive tracker input (default: 9871)")
-    parser.add_argument("--calibration-file", type=str, default=None,
-                        help="Vive calibration JSON file (SteamVR→robot transform)")
     parser.add_argument("--robot-ip", type=str, default=None,
                         help="Robot IP for rtde mode (overrides config)")
     parser.add_argument("--config", type=str, default=None,
@@ -672,14 +626,7 @@ def main():
         log_path = f"impedance_teleop_log_{ts}.csv"
         print(f"[ImpedanceTeleop] Logging to: {log_path}")
 
-    extra_input_kwargs = {}
-    if hasattr(args, "vive_port") and args.vive_port:
-        extra_input_kwargs["vive_port"] = args.vive_port
-    if hasattr(args, "calibration_file") and args.calibration_file:
-        extra_input_kwargs["calibration_file"] = args.calibration_file
-
-    controller = ImpedanceTeleopController(config, log_path=log_path,
-                                           extra_input_kwargs=extra_input_kwargs)
+    controller = ImpedanceTeleopController(config, log_path=log_path)
 
     def signal_handler(sig, frame):
         controller.running = False

@@ -51,17 +51,6 @@ HELP_KEYBOARD = """\
   1/2/3/4 : Stiff/Med/Soft/Free
 ========================================"""
 
-HELP_JOYSTICK = """\
-=== UR10e Teleop Servo (Pink IK) ===
-  L-Stick : XY move   R-Stick : Roll/Pitch
-  LT/RT   : Down/Up   LB/RB   : Yaw -/+
-  D-pad L/R : Tool Z +/- (EE fwd/back)
-  D-pad U/D : Speed +/-
-  B : Cycle Preset   Y : Zero F/T
-  START : Reset   BACK : Quit   Logo : E-Stop
-  Admittance: always ON
-========================================"""
-
 # Number of fixed status lines
 STATUS_LINES = 8
 
@@ -97,11 +86,9 @@ def apply_rotation_delta(
 class TeleopController:
     """Main teleop controller integrating all modules."""
 
-    def __init__(self, config: TeleopConfig, log_path: Optional[str] = None,
-                 extra_input_kwargs: dict | None = None):
+    def __init__(self, config: TeleopConfig, log_path: Optional[str] = None):
         self.config = config
         self.running = True
-        self._extra_input_kwargs = extra_input_kwargs or {}
 
         # Modules
         self.backend: Optional[RobotBackend] = None
@@ -251,37 +238,11 @@ class TeleopController:
         backend_kwargs = {"robot_ip": cfg.robot.ip}
         self.backend = create_backend(cfg.robot.mode, **backend_kwargs)
 
-        # Create input (network mode uses separate, lower velocity scales)
-        if cfg.input.type == "network":
-            lin_scale = cfg.input.network_linear_scale
-            ang_scale = cfg.input.network_angular_scale
-        else:
-            lin_scale = cfg.input.xbox_linear_scale
-            ang_scale = cfg.input.xbox_angular_scale
-
-        vive_kwargs = {
-            "vive_port": cfg.input.vive_port,
-            "vive_linear_scale": cfg.input.vive_linear_scale,
-            "vive_angular_scale": cfg.input.vive_angular_scale,
-            "vive_deadzone": cfg.input.vive_deadzone,
-            "calibration_file": cfg.input.vive_calibration_file,
-        }
-        vive_kwargs.update(self._extra_input_kwargs)  # CLI overrides
-
-        # Unified input: pose_provider set later after IK init (see run())
-        unified_kwargs = {
-            "unified_port": cfg.input.unified_port,
-        }
-
         self.input_handler = create_input(
             cfg.input.type,
             cartesian_step=cfg.input.cartesian_step,
             rotation_step=cfg.input.rotation_step,
-            linear_scale=lin_scale,
-            angular_scale=ang_scale,
-            network_port=cfg.input.network_port,
-            **vive_kwargs,
-            **unified_kwargs,
+            unified_port=cfg.input.unified_port,
         )
 
         # Sim mode: switch controller
@@ -324,8 +285,7 @@ class TeleopController:
                 )
 
             print(f"[Teleop] Initial EE: x={self.ee_pos[0]:.4f} y={self.ee_pos[1]:.4f} z={self.ee_pos[2]:.4f}")
-            help_text = HELP_KEYBOARD if cfg.input.type == "keyboard" else HELP_JOYSTICK
-            print(help_text)
+            print(HELP_KEYBOARD)
 
             # Reserve blank lines for status display
             for _ in range(STATUS_LINES):
@@ -409,7 +369,7 @@ class TeleopController:
                 target_pos = cmd.target_pos.copy()
                 target_quat = cmd.target_quat.copy()  # xyzw (already converted)
             else:
-                # Velocity mode (local keyboard/xbox) — accumulate
+                # Velocity mode (keyboard) — accumulate
                 target_pos = target_pos + cmd.velocity[:3]
                 target_quat = apply_rotation_delta(target_quat, cmd.velocity[3:], 1.0)
 
@@ -481,12 +441,8 @@ def main():
     parser = argparse.ArgumentParser(description="UR10e Teleop Servo Control")
     parser.add_argument("--mode", choices=["sim", "rtde"], default=None,
                         help="Backend mode (overrides config)")
-    parser.add_argument("--input", choices=["keyboard", "xbox", "network", "vive", "unified"], default=None,
+    parser.add_argument("--input", choices=["keyboard", "unified"], default=None,
                         help="Input device (overrides config)")
-    parser.add_argument("--vive-port", type=int, default=9871,
-                        help="UDP port for Vive tracker input (default: 9871)")
-    parser.add_argument("--calibration-file", type=str, default=None,
-                        help="Vive calibration JSON file (SteamVR→robot transform)")
     parser.add_argument("--robot-ip", type=str, default=None,
                         help="Robot IP for rtde mode (overrides config)")
     parser.add_argument("--config", type=str, default=None,
@@ -513,16 +469,7 @@ def main():
         log_path = f"teleop_log_{ts}.csv"
         print(f"[Teleop] Logging to: {log_path}")
 
-    # Vive-specific kwargs
-    extra_input_kwargs = {}
-    if hasattr(args, "vive_port") and args.vive_port:
-        extra_input_kwargs["vive_port"] = args.vive_port
-    if hasattr(args, "calibration_file") and args.calibration_file:
-        extra_input_kwargs["calibration_file"] = args.calibration_file
-
-    # Run
-    controller = TeleopController(config, log_path=log_path,
-                                  extra_input_kwargs=extra_input_kwargs)
+    controller = TeleopController(config, log_path=log_path)
 
     def signal_handler(sig, frame):
         controller.running = False

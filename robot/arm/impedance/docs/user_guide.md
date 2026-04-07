@@ -43,13 +43,12 @@ Input → ExpFilter → Workspace Clamp     RTDE 레지스터 읽기
 - **ur_rtde** Python 라이브러리 (`pip install ur-rtde`)
 - **Pink IK**: `pip install pin-pink proxsuite` (주의: `pip install pink`은 코드 포매터!)
 - **numpy < 2**: `pip install "numpy<2"` (ROS Humble pinocchio 호환)
-- **Xbox 컨트롤러 사용 시**: `pip install pygame`
 
 
 ## 실행 방법
 
 ```bash
-cd /workspaces/tamp_ws/src/tamp_dev
+cd /workspaces/tamp_ws/src/teleop_dev
 
 # Sim 모드 (mock hardware — 위치 제어 fallback, 토크 없음)
 python3 -m robot.arm.impedance.main --mode sim --input keyboard
@@ -57,8 +56,8 @@ python3 -m robot.arm.impedance.main --mode sim --input keyboard
 # 실제 로봇 (임피던스 토크 제어)
 python3 -m robot.arm.impedance.main --mode rtde --input keyboard --robot-ip 192.168.0.2
 
-# Xbox 컨트롤러 + CSV 로깅
-python3 -m robot.arm.impedance.main --mode rtde --input xbox --robot-ip 192.168.0.2 --log
+# Unified 입력 (operator PC sender 수신) + CSV 로깅
+python3 -m robot.arm.impedance.main --mode rtde --input unified --robot-ip 192.168.0.2 --log
 
 # 커스텀 설정 파일
 python3 -m robot.arm.impedance.main --config path/to/config.yaml
@@ -77,7 +76,7 @@ ros2 launch ur_robot_driver ur10e.launch.py use_fake_hardware:=true robot_ip:=0.
 | 인자 | 기본값 | 설명 |
 |------|--------|------|
 | `--mode` | config 파일 | `sim` 또는 `rtde` (백엔드 선택) |
-| `--input` | config 파일 | `keyboard` 또는 `xbox` (입력 장치) |
+| `--input` | config 파일 | `keyboard` 또는 `unified` (입력 장치) |
 | `--robot-ip` | `192.168.0.2` | RTDE 모드 로봇 IP |
 | `--config` | `config/default.yaml` | 설정 파일 경로 |
 | `--log` | off | CSV 로깅 활성화 (`impedance_teleop_log_YYYYMMDD_HHMMSS.csv`) |
@@ -124,19 +123,17 @@ ros2 launch ur_robot_driver ur10e.launch.py use_fake_hardware:=true robot_ip:=0.
 키를 **누르고 있으면** 타겟이 계속 누적되어 연속 이동합니다.
 
 
-## Xbox 컨트롤러 조작
+## Unified 입력 (원격 sender)
 
-| 입력 | 동작 |
-|------|------|
-| 왼쪽 스틱 X/Y | 선형 X/Y 속도 |
-| 오른쪽 스틱 X/Y | 각속도 Roll/Pitch |
-| LT / RT 트리거 | 선형 Z 속도 (RT - LT) |
-| LB / RB 버튼 | 각속도 Yaw |
-| A 버튼 | E-Stop 해제 |
-| B 버튼 | E-Stop 발동 |
-| Start 버튼 | 종료 |
+Operator PC에서 Vive Tracker, 키보드, 조이스틱 sender가 UDP로 보내는 절대 포즈를 수신합니다.
 
-데드존: 0.1 (이하 입력 무시)
+```bash
+python3 -m robot.arm.impedance.main --mode rtde --input unified --robot-ip 192.168.0.2
+```
+
+- Operator PC에서 sender 실행: `python3 -m sender.arm.vive_sender --target-ip <ROBOT_PC_IP>`
+- 버튼 매핑은 sender 측에서 처리 (E-Stop, Reset, 속도 조절, 임피던스 프리셋 등)
+- 로봇 PC는 수신만 하며, sender 시작 시 현재 TCP 포즈를 자동 응답
 
 
 ## 임피던스 제어 원리
@@ -274,11 +271,9 @@ control:
   frequency_rtde: 125         # Hz (rtde 모드, RTDE 레지스터 업데이트 주기)
 
 input:
-  type: "keyboard"            # "keyboard" | "xbox"
+  type: "keyboard"            # "keyboard" | "unified"
   cartesian_step: 0.01        # m/press (1x 속도 기준)
   rotation_step: 0.05         # rad/press (1x 속도 기준)
-  xbox_linear_scale: 0.03     # Xbox 스틱 → 선형 속도 스케일
-  xbox_angular_scale: 0.08    # Xbox 스틱 → 각속도 스케일
 
 filter:
   alpha_position: 0.85        # EMA alpha (0~1, 높을수록 반응 빠름)
@@ -365,7 +360,7 @@ robot/arm/impedance/
 
 | 모듈 | 용도 |
 |------|------|
-| `core/input_handler.py` | 키보드/Xbox 입력 추상화 |
+| `core/input_handler.py` | 키보드/Unified 입력 추상화 |
 | `core/exp_filter.py` | EMA 위치 + slerp 자세 필터 |
 | `core/pink_ik.py` | QP 기반 task-level IK |
 | `core/robot_backend.py` | RobotBackend ABC + `create_backend()` |

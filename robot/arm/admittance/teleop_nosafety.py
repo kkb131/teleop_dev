@@ -46,17 +46,6 @@ HELP_KEYBOARD = """\
   1/2/3/4 : Stiff/Med/Soft/Free
 ===================================="""
 
-HELP_JOYSTICK = """\
-=== UR10e Teleop (No Safety) ===
-  L-Stick : XY move   R-Stick : Roll/Pitch
-  LT/RT   : Down/Up   LB/RB   : Yaw -/+
-  D-pad L/R : Tool Z +/- (EE fwd/back)
-  D-pad U/D : Speed +/-
-  B : Cycle Preset   Y : Zero F/T
-  START : Reset   BACK : Quit   Logo : E-Stop
-  Admittance: always ON
-===================================="""
-
 STATUS_LINES = 6
 
 
@@ -199,20 +188,11 @@ class TeleopNoSafety:
         self.backend = create_backend(cfg.robot.mode, **backend_kwargs)
 
         # Create input (network mode uses separate, lower velocity scales)
-        if cfg.input.type == "network":
-            lin_scale = cfg.input.network_linear_scale
-            ang_scale = cfg.input.network_angular_scale
-        else:
-            lin_scale = cfg.input.xbox_linear_scale
-            ang_scale = cfg.input.xbox_angular_scale
-
         self.input_handler = create_input(
             cfg.input.type,
             cartesian_step=cfg.input.cartesian_step,
             rotation_step=cfg.input.rotation_step,
-            linear_scale=lin_scale,
-            angular_scale=ang_scale,
-            network_port=cfg.input.network_port,
+            unified_port=cfg.input.unified_port,
         )
 
         # Sim mode: switch controller
@@ -245,8 +225,7 @@ class TeleopNoSafety:
             )
 
             print(f"[Teleop-NoSafety] Initial EE: x={self.ee_pos[0]:.4f} y={self.ee_pos[1]:.4f} z={self.ee_pos[2]:.4f}")
-            help_text = HELP_KEYBOARD if cfg.input.type == "keyboard" else HELP_JOYSTICK
-            print(help_text)
+            print(HELP_KEYBOARD)
 
             # Reserve blank lines for status display
             for _ in range(STATUS_LINES):
@@ -350,7 +329,7 @@ def main():
     parser = argparse.ArgumentParser(description="UR10e Teleop (No Safety)")
     parser.add_argument("--mode", choices=["sim", "rtde"], default=None,
                         help="Backend mode (overrides config)")
-    parser.add_argument("--input", choices=["keyboard", "xbox", "network"], default=None,
+    parser.add_argument("--input", choices=["keyboard", "unified"], default=None,
                         help="Input device (overrides config)")
     parser.add_argument("--robot-ip", type=str, default=None,
                         help="Robot IP for rtde mode (overrides config)")
