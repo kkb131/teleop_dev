@@ -3,16 +3,17 @@
 Per-finger DLS IK with Ergonomics-guided redundancy resolution.
 Abduction fixed from Manus Ergonomics, 3-DOF IK for MCP/PIP/DIP.
 
-Coordinate frame strategy:
-    ALL IK is done in DG5F URDF world frame (origin = wrist mount = [0,0,0]).
-    Manus skeleton is transformed: wrist-relative → SVD rotate → scale.
-    No palm offset needed since URDF origin IS the wrist.
+Coordinate strategy (validated at commit 853c174):
+    - R = identity (no rotation — assumes Manus and DG5F share axes)
+    - p_target = p_human_wrist_relative * scale + palm_offset
+    - palm_offset shifts from wrist origin to palm region
+    - Scale = robot_tip_dist / human_tip_dist (auto from first frame)
 
 Pipeline:
     skeleton (N, 7) + ergonomics (20,)
     → extract fingertip positions (wrist-relative)
-    → SVD rotate (Manus frame → DG5F frame)
     → scale by bone length ratio
+    → add palm_offset
     → per-finger DLS IK (abd=ergo, 3-DOF solve)
     → clamp → EMA filter → DG5F (20, rad)
 """
@@ -28,23 +29,6 @@ from sender.hand.gen2a_fingertip_ik.per_finger_ik import PerFingerIK
 from sender.hand.gen2a_fingertip_ik.scale_calibrator import (
     ScaleCalibrator, MANUS_TIP_INDICES,
 )
-
-
-def _compute_procrustes(src: np.ndarray, dst: np.ndarray):
-    """Compute rotation R that best aligns src→dst (no reflection).
-
-    src, dst: (N, 3) corresponding point sets.
-    Returns R (3,3) with det(R) = +1 (pure rotation, no reflection).
-    """
-    src_c = src - src.mean(axis=0)
-    dst_c = dst - dst.mean(axis=0)
-    H = src_c.T @ dst_c
-    U, S, Vt = np.linalg.svd(H)
-    # Force det(R) = +1 to prevent reflection
-    d = np.linalg.det(Vt.T @ U.T)
-    D = np.diag([1, 1, np.sign(d)])
-    R = Vt.T @ D @ U.T
-    return R
 
 
 class FingertipIKRetarget(HandRetargetBase):
@@ -66,15 +50,19 @@ class FingertipIKRetarget(HandRetargetBase):
 
         self._fk = DG5FKinematics(hand_side)
         self._solvers = [PerFingerIK(self._fk, i, damping) for i in range(5)]
-        self._calibrator = ScaleCalibrator(self._fk)
         self._scale = np.ones(5)
         self._is_calibrated = False
 
-        # SVD rotation: Manus wrist-relative → DG5F wrist-relative
-        self._R = np.eye(3)
+        # Palm offset: shift from URDF origin (wrist) to palm region
+        # This is the key offset that makes IK work (validated at 853c174)
+        self._palm_offset = self._fk.palm_position(np.zeros(NUM_JOINTS))
 
-        # DG5F fingertip positions at q=0 (wrist frame) — used for scale ref
+        # Robot tip distances at q=0 (for scale computation)
         self._robot_tips_at_zero = self._fk.fingertip_positions(np.zeros(NUM_JOINTS))
+        self._robot_tip_dists = np.array([
+            np.linalg.norm(self._robot_tips_at_zero[i])
+            for i in range(5)
+        ])
 
         self._q_prev = np.zeros(NUM_JOINTS)
         self._ema = EMAFilter(alpha=ema_alpha, size=NUM_JOINTS)
@@ -85,39 +73,30 @@ class FingertipIKRetarget(HandRetargetBase):
         self._last_errors = np.zeros(5)
 
     def calibrate(self, skeleton: np.ndarray, **kwargs):
-        """Open-hand calibration.
+        """Compute per-finger bone length scale from open-hand skeleton.
 
-        1. Compute per-finger bone length scale
-        2. Compute SVD rotation (Manus → DG5F wrist frame)
+        scale[i] = robot_tip_dist[i] / human_tip_dist[i]
+        No rotation (R=I). Palm offset is fixed from URDF.
         """
-        # Validate skeleton
         max_idx = max(MANUS_TIP_INDICES)
         if len(skeleton) <= max_idx:
             print(f"[2A-Cal] WARNING: skeleton has {len(skeleton)} nodes, "
-                  f"need {max_idx + 1}. Using identity rotation.")
-            self._R = np.eye(3)
-            self._is_calibrated = False
+                  f"need {max_idx + 1}. Skipping calibration.")
             return
 
         wrist = skeleton[0, :3]
+        human_dists = np.array([
+            np.linalg.norm(skeleton[idx, :3] - wrist)
+            for idx in MANUS_TIP_INDICES
+        ])
 
-        # 1. Scale: wrist→tip distance ratio (human vs robot)
-        human_tips = np.array([skeleton[idx, :3] - wrist for idx in MANUS_TIP_INDICES])
-        human_dists = np.array([np.linalg.norm(h) for h in human_tips])
-        robot_dists = np.array([np.linalg.norm(self._robot_tips_at_zero[i])
-                                for i in range(5)])
-        self._scale = robot_dists / np.maximum(human_dists, 1e-6)
-
-        # 2. SVD rotation: align Manus wrist-relative tips → DG5F wrist-relative tips
-        # Both are wrist-relative (origin = wrist = [0,0,0])
-        self._R = _compute_procrustes(human_tips, self._robot_tips_at_zero)
+        self._scale = self._robot_tip_dists / np.maximum(human_dists, 1e-6)
         self._is_calibrated = True
 
-        det_r = np.linalg.det(self._R)
         print(f"[2A-Cal] Scale: {[f'{s:.3f}' for s in self._scale]}")
-        print(f"[2A-Cal] Rotation det={det_r:.4f} (should be +1.0)")
-        print(f"[2A-Cal] Human tip dists (m): {[f'{d:.4f}' for d in human_dists]}")
-        print(f"[2A-Cal] Robot tip dists (m): {[f'{d:.4f}' for d in robot_dists]}")
+        print(f"[2A-Cal] Human dists (m): {[f'{d:.4f}' for d in human_dists]}")
+        print(f"[2A-Cal] Robot dists (m): {[f'{d:.4f}' for d in self._robot_tip_dists]}")
+        print(f"[2A-Cal] Palm offset: {self._palm_offset}")
 
     def retarget(self, skeleton: np.ndarray = None,
                  ergonomics: np.ndarray = None, **kwargs) -> np.ndarray:
@@ -137,7 +116,7 @@ class FingertipIKRetarget(HandRetargetBase):
         if skeleton is None or ergonomics is None:
             return self._q_prev.copy()
 
-        # Auto-calibrate from first valid skeleton (prevents fist default)
+        # Auto-calibrate from first valid skeleton
         if not self._is_calibrated:
             max_idx = max(MANUS_TIP_INDICES)
             if len(skeleton) > max_idx:
@@ -152,19 +131,18 @@ class FingertipIKRetarget(HandRetargetBase):
             if tip_idx >= len(skeleton):
                 continue
 
-            # 1. Human tip: wrist-relative (Manus frame)
+            # 1. Human tip: wrist-relative
             p_human_local = skeleton[tip_idx, :3] - wrist
 
-            # 2. Transform to DG5F wrist frame:
-            #    rotate (Manus→DG5F) + scale (human→robot)
-            #    NO offset needed — URDF origin = wrist = [0,0,0]
-            p_target = self._R @ p_human_local * self._scale[f]
+            # 2. Scale + palm offset (NO rotation, validated at 853c174)
+            p_scaled = p_human_local * self._scale[f]
+            p_target = p_scaled + self._palm_offset
             self._last_targets[f] = p_target
 
             # 3. Abduction from Ergonomics
             abd_angle = ergonomics[f * 4]
 
-            # 4. Per-finger IK (target in DG5F wrist frame = FK frame)
+            # 4. Per-finger IK
             q_finger = self._solvers[f].solve(
                 p_target=p_target,
                 abd_angle=abd_angle,
@@ -194,8 +172,6 @@ class FingertipIKRetarget(HandRetargetBase):
             "calibrated": self._is_calibrated,
             "tip_errors_mm": (self._last_errors * 1000).tolist(),
             "mean_error_mm": float(np.mean(self._last_errors) * 1000),
-            "targets": self._last_targets.tolist(),
-            "achieved": self._last_achieved.tolist(),
         }
 
     def reset_filter(self):
