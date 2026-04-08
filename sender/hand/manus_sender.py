@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
-"""UDP Manus glove data sender — run on the operator PC with Manus gloves.
+"""UDP Manus glove data sender — run on the operator PC.
 
-Reads finger joint angles and wrist pose from Manus Quantum Metagloves
-via the Manus SDK, then sends combined data over UDP to the robot PC.
+Reads finger joint angles from Manus Quantum Metagloves via ROS2 topic
+(manus_ros2) or SDK subprocess, applies retargeting, and sends DG5F
+joint angles over UDP to the robot PC.
 
 Requirements: numpy, pyyaml, pynput
     pip install numpy pyyaml pynput
 
 Usage:
-    # 기존 (raw 전송, retarget은 receiver에서)
+    # Raw 전송 (retarget 없이, receiver에서 처리 안 함)
     python3 -m sender.hand.manus_sender --target-ip <ROBOT_IP> --hand right
-    python3 -m sender.hand.manus_sender --config sender/hand/config/default.yaml
-    python3 -m sender.hand.manus_sender --target-ip 10.0.0.5 --hand both
-    
-    # 벡터 최적화 retarget (sender에서 DG5F 각도로 변환 후 전송)
-    python3 -m sender.hand.manus_sender --target-ip <ROBOT_IP> --hand right --retarget vector --calibrate
-    
 
+    # [1A] Ergonomics Direct Mapping (권장)
+    python3 -m sender.hand.manus_sender --target-ip <ROBOT_IP> --hand right \
+        --retarget ergo-direct --sdk-mode ros2
+
+    # [1A] + 2포즈 캘리브레이션 (open hand → fist)
+    python3 -m sender.hand.manus_sender --target-ip <ROBOT_IP> --hand right \
+        --retarget ergo-direct --sdk-mode ros2 --calibrate
 """
 
 import argparse
@@ -166,17 +168,10 @@ def main():
                         choices=["subprocess", "ros2"],
                         help="SDK mode: subprocess=SDKClient binary, ros2=manus_ros2 topics (default: from config)")
     parser.add_argument("--retarget", default="none",
-                        choices=["none", "vector", "direct", "ergo-direct"],
-                        help="Retarget mode: none=raw, ergo-direct=[1A] ergonomics direct, "
-                             "vector=optimization(legacy), direct=angle mapping(legacy)")
+                        choices=["none", "ergo-direct"],
+                        help="Retarget mode: none=raw ergonomics, ergo-direct=[1A] DG5F direct mapping")
     parser.add_argument("--calibrate", action="store_true",
-                        help="Calibrate baseline at startup (hold hand flat, fingers together)")
-    parser.add_argument("--calibrate-fist", action="store_true",
-                        help="Also calibrate fist for scale factors (direct mode)")
-    parser.add_argument("--urdf", default=None,
-                        help="DG5F URDF path (for retarget)")
-    parser.add_argument("--retarget-config", default=None,
-                        help="Retarget calibration config YAML (for direct mode)")
+                        help="2-pose calibration at startup (open hand + fist)")
     args = parser.parse_args()
 
     # Load config
@@ -204,7 +199,7 @@ def main():
 
     # Retarget setup
     retarget = None
-    _retarget_uses_ergonomics = False  # True if retarget takes ergonomics, not skeleton
+    # retarget setup
 
     if args.retarget == "ergo-direct":
         import numpy as np
@@ -212,7 +207,6 @@ def main():
         retarget = ErgoDirectRetarget(
             hand_side=hand_side if hand_side != "both" else "right",
         )
-        _retarget_uses_ergonomics = True
         print(f"[Sender] Retarget: 1A-ergo-direct ({hand_side})")
 
         if args.calibrate:
@@ -255,47 +249,6 @@ def main():
 
             print("\n[1A-Cal] Calibration complete!\n")
 
-    elif args.retarget in ("vector", "direct"):
-        # Legacy modes (skeleton-based)
-        import numpy as np
-        from sender.hand.retarget import create_retarget
-        retarget = create_retarget(
-            mode=args.retarget,
-            hand_side=hand_side if hand_side != "both" else "right",
-            urdf_path=args.urdf,
-            config_path=args.retarget_config,
-        )
-        print(f"[Sender] Retarget: {args.retarget} ({hand_side}) [legacy]")
-
-        if args.calibrate:
-            print("[Sender] Calibrating baseline — hold hand OPEN...")
-            time.sleep(1.0)
-            samples = []
-            cal_start = time.time()
-            while time.time() - cal_start < 3.0:
-                data = reader.get_hand_data()
-                if data is not None and data.skeleton is not None:
-                    samples.append(data.skeleton.copy())
-                time.sleep(0.016)
-            if samples:
-                baseline = np.mean(samples, axis=0)
-                retarget.calibrate_baseline(baseline)
-
-        if args.calibrate_fist and hasattr(retarget, 'calibrate_fist_from_frames'):
-            print("[Sender] Now make a FIST — recording for 3 seconds...")
-            time.sleep(2.0)
-            samples = []
-            cal_start = time.time()
-            while time.time() - cal_start < 3.0:
-                data = reader.get_hand_data()
-                if data is not None and data.skeleton is not None:
-                    samples.append(data.skeleton.copy())
-                time.sleep(0.016)
-            if samples:
-                retarget.calibrate_fist_from_frames(samples)
-                if hasattr(retarget, 'save_config'):
-                    retarget.save_config(args.retarget_config or "sender/hand/retarget/config/direct_mapping.yaml")
-
     # Start keyboard listener
     kb = KeyboardState()
     kb.start()
@@ -327,17 +280,9 @@ def main():
                 """Apply retarget to HandData, return retargeted flag."""
                 if retarget is None:
                     return False
-                if _retarget_uses_ergonomics:
-                    # [1A] ergo-direct: uses joint_angles directly
-                    dg5f_q = retarget.retarget(ergonomics=data.joint_angles)
-                    data.joint_angles = dg5f_q.astype(np.float32)
-                    return True
-                elif data.skeleton is not None:
-                    # Legacy: uses skeleton
-                    dg5f_q = retarget.retarget(data.skeleton)
-                    data.joint_angles = dg5f_q.astype(np.float32)
-                    return True
-                return False
+                dg5f_q = retarget.retarget(ergonomics=data.joint_angles)
+                data.joint_angles = dg5f_q.astype(np.float32)
+                return True
 
             if hand_side == "both":
                 hands = reader.get_both_hands()
