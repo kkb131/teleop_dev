@@ -215,6 +215,46 @@ def main():
         _retarget_uses_ergonomics = True
         print(f"[Sender] Retarget: 1A-ergo-direct ({hand_side})")
 
+        if args.calibrate:
+            def _collect_ergo_samples(duration=3.0):
+                """Collect ergonomics samples for calibration."""
+                samples = []
+                t0 = time.time()
+                while time.time() - t0 < duration:
+                    data = reader.get_hand_data()
+                    if data is not None:
+                        samples.append(data.joint_angles.copy())
+                    time.sleep(0.016)
+                return samples
+
+            # Step 1: Rest (open hand)
+            print("\n[1A-Cal] === Step 1/2: OPEN HAND ===")
+            print("[1A-Cal] Hold hand FULLY OPEN (fingers spread) for 3 seconds...")
+            time.sleep(2.0)
+            print("[1A-Cal] Recording...")
+            rest_samples = _collect_ergo_samples(3.0)
+            if rest_samples:
+                rest_avg = np.mean(rest_samples, axis=0)
+                retarget.calibrate_rest(rest_avg)
+                print(f"[1A-Cal] Rest recorded ({len(rest_samples)} samples)")
+            else:
+                print("[1A-Cal] WARNING: No data received!")
+
+            # Step 2: Fist
+            print("\n[1A-Cal] === Step 2/2: FIST ===")
+            print("[1A-Cal] Make a TIGHT FIST for 3 seconds...")
+            time.sleep(2.0)
+            print("[1A-Cal] Recording...")
+            fist_samples = _collect_ergo_samples(3.0)
+            if fist_samples:
+                fist_avg = np.mean(fist_samples, axis=0)
+                retarget.calibrate_fist(fist_avg)
+                print(f"[1A-Cal] Fist recorded ({len(fist_samples)} samples)")
+            else:
+                print("[1A-Cal] WARNING: No data received!")
+
+            print("\n[1A-Cal] Calibration complete!\n")
+
     elif args.retarget in ("vector", "direct"):
         # Legacy modes (skeleton-based)
         import numpy as np

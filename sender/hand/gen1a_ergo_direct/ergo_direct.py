@@ -82,9 +82,62 @@ class ErgoDirectRetarget(HandRetargetBase):
         self._joint_names = get_joint_names(hand_side)
         self._ema = EMAFilter(alpha=ema_alpha, size=NUM_JOINTS)
 
+        # 2포즈 캘리브레이션 (rest/fist min-max normalization)
+        self._rest_values: Optional[np.ndarray] = None   # open hand ergo (20,)
+        self._fist_values: Optional[np.ndarray] = None    # fist ergo (20,)
+        self._rom_scale: Optional[np.ndarray] = None      # dg5f_range / human_rom
+        self._rom_offset: Optional[np.ndarray] = None     # -rest * scale
+        self._is_rom_calibrated = False
+
         # 디버그용
         self._last_raw = np.zeros(NUM_JOINTS)
         self._last_transformed = np.zeros(NUM_JOINTS)
+
+    def calibrate_rest(self, ergonomics: np.ndarray):
+        """Record open-hand ergonomics as rest pose (Step 1 of 2).
+
+        Parameters
+        ----------
+        ergonomics : ndarray[20]
+            Averaged ergonomics from open-hand pose (radians).
+        """
+        self._rest_values = ergonomics.copy()
+        print(f"[1A-Cal] Rest pose recorded. "
+              f"MCP values: {[f'{np.degrees(ergonomics[f*4+1]):.1f}°' for f in range(5)]}")
+
+    def calibrate_fist(self, ergonomics: np.ndarray):
+        """Record fist ergonomics and compute ROM scale (Step 2 of 2).
+
+        Requires calibrate_rest() to be called first.
+        Computes: scale[i] = dg5f_range[i] / |human_rom[i]|
+
+        Parameters
+        ----------
+        ergonomics : ndarray[20]
+            Averaged ergonomics from fist pose (radians).
+        """
+        if self._rest_values is None:
+            print("[1A-Cal] ERROR: call calibrate_rest() first!")
+            return
+
+        self._fist_values = ergonomics.copy()
+        human_rom = self._fist_values - self._rest_values
+        min_rom = np.radians(5.0)  # ignore ROM < 5° (noise)
+
+        self._rom_scale = np.ones(NUM_JOINTS, dtype=np.float64)
+        self._rom_offset = np.zeros(NUM_JOINTS, dtype=np.float64)
+
+        for i in range(NUM_JOINTS):
+            dg5f_range = self._upper[i] - self._lower[i]
+            if abs(human_rom[i]) > min_rom:
+                self._rom_scale[i] = dg5f_range / abs(human_rom[i])
+                self._rom_offset[i] = -self._rest_values[i] * self._rom_scale[i]
+
+        self._is_rom_calibrated = True
+        print(f"[1A-Cal] Fist calibrated! ROM scale MCP: "
+              f"{[f'{self._rom_scale[f*4+1]:.2f}' for f in range(5)]}")
+        print(f"[1A-Cal] Human ROM MCP (deg): "
+              f"{[f'{np.degrees(human_rom[f*4+1]):.1f}' for f in range(5)]}")
 
     def retarget(self, ergonomics: np.ndarray, **kwargs) -> np.ndarray:
         """Manus ergonomics (20, radians) → DG5F joint angles (20, radians).
@@ -102,6 +155,12 @@ class ErgoDirectRetarget(HandRetargetBase):
         """
         assert ergonomics.shape == (NUM_JOINTS,), f"Expected (20,), got {ergonomics.shape}"
         self._last_raw = ergonomics.copy()
+
+        # 0) ROM normalization (if calibrated via 2-pose)
+        #    normalized[i] = (ergo[i] - rest[i]) * rom_scale[i]
+        #    → rest pose → 0, fist pose → dg5f_range
+        if self._is_rom_calibrated:
+            ergonomics = ergonomics * self._rom_scale + self._rom_offset
 
         # 1) Degree로 변환 (Tesollo 변환식이 degree 기반)
         q_deg = np.degrees(ergonomics)
