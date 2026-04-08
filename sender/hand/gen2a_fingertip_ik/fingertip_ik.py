@@ -2,21 +2,9 @@
 
 Per-finger DLS IK with Ergonomics-guided redundancy resolution.
 
-Coordinate strategy: RELATIVE MOTION SCALING
-    p_target = (human_now - human_cal) * scale + robot_tip_at_q0
-
-    - cal pose (spread): human_now == human_cal → target = robot_q0 → IK=0°
-    - fist: human tip closer to wrist → negative delta → target closer to palm → IK flexes
-    - scale = robot_tip_dist / human_tip_dist (compensates hand size difference)
-
-Pipeline:
-    skeleton + ergonomics
-    → wrist-relative tip positions
-    → relative delta from calibration pose
-    → scale delta
-    → add robot tip at q=0
-    → per-finger DLS IK
-    → clamp → EMA → DG5F (20, rad)
+Coordinate strategy (853c174 — validated on real hardware):
+    p_target = p_human_wrist_relative * 1.0 + palm_offset
+    R = identity, scale = 1. No calibration needed.
 """
 
 import numpy as np
@@ -38,75 +26,60 @@ class FingertipIKRetarget(HandRetargetBase):
 
         self._fk = DG5FKinematics(hand_side)
         self._solvers = [PerFingerIK(self._fk, i, damping) for i in range(5)]
-        self._is_calibrated = False
 
-        # Robot reference: tip positions at q=0 (wrist frame)
-        self._robot_tips_q0 = self._fk.fingertip_positions(np.zeros(NUM_JOINTS))
-        self._robot_tip_dists = np.array([
-            np.linalg.norm(self._robot_tips_q0[i]) for i in range(5)
-        ])
-
-        # Calibration data (set from first frame or --calibrate)
-        self._human_cal_tips = None  # (5, 3) wrist-relative tip positions at cal
-        self._scale = np.ones(5)     # per-finger scale
+        # 853c174 strategy: R=I, scale=1, +palm_offset
+        self._scale = np.ones(5)
+        self._palm_offset = self._fk.palm_position(np.zeros(NUM_JOINTS))
+        self._is_calibrated = False  # stays False unless --calibrate
 
         self._q_prev = np.zeros(NUM_JOINTS)
         self._ema = EMAFilter(alpha=ema_alpha, size=NUM_JOINTS)
         self._last_errors = np.zeros(5)
+        self._frame_count = 0
 
     def calibrate(self, skeleton: np.ndarray, **kwargs):
-        """Record open-hand reference + compute scale."""
+        """Optional: compute per-finger scale from skeleton."""
         max_idx = max(MANUS_TIP_INDICES)
         if len(skeleton) <= max_idx:
             print(f"[2A-Cal] WARNING: skeleton {len(skeleton)} nodes < {max_idx+1}")
             return
 
         wrist = skeleton[0, :3]
-        self._human_cal_tips = np.array([
-            skeleton[idx, :3] - wrist for idx in MANUS_TIP_INDICES
-        ])
+        robot_tips = self._fk.fingertip_positions(np.zeros(NUM_JOINTS))
 
-        human_dists = np.array([np.linalg.norm(t) for t in self._human_cal_tips])
-        self._scale = self._robot_tip_dists / np.maximum(human_dists, 1e-6)
+        for i, idx in enumerate(MANUS_TIP_INDICES):
+            h_dist = np.linalg.norm(skeleton[idx, :3] - wrist)
+            r_dist = np.linalg.norm(robot_tips[i])
+            if h_dist > 0.01:
+                self._scale[i] = r_dist / h_dist
+            print(f"  [{['Thumb','Index','Middle','Ring','Pinky'][i]}] "
+                  f"human={h_dist:.4f}m robot={r_dist:.4f}m scale={self._scale[i]:.3f}")
+
         self._is_calibrated = True
-
         print(f"[2A-Cal] Scale: {[f'{s:.2f}' for s in self._scale]}")
-        print(f"[2A-Cal] Human dists: {[f'{d:.4f}' for d in human_dists]}")
-        print(f"[2A-Cal] Robot dists: {[f'{d:.4f}' for d in self._robot_tip_dists]}")
 
     def retarget(self, skeleton: np.ndarray = None,
                  ergonomics: np.ndarray = None, **kwargs) -> np.ndarray:
         if skeleton is None or ergonomics is None:
             return self._q_prev.copy()
 
-        # Auto-calibrate from first valid frame
-        if not self._is_calibrated:
-            if len(skeleton) > max(MANUS_TIP_INDICES):
-                print("[2A] Auto-calibrating from first frame...")
-                self.calibrate(skeleton=skeleton)
-
-        if not self._is_calibrated:
-            return self._q_prev.copy()
-
         wrist = skeleton[0, :3]
         q = self._q_prev.copy()
+        self._frame_count += 1
 
         for f in range(5):
             tip_idx = MANUS_TIP_INDICES[f]
             if tip_idx >= len(skeleton):
                 continue
 
-            # 1. Current tip: wrist-relative
-            p_human_now = skeleton[tip_idx, :3] - wrist
+            # 853c174 formula: p_human_local * scale + palm_offset
+            p_human_local = skeleton[tip_idx, :3] - wrist
+            p_target = p_human_local * self._scale[f] + self._palm_offset
 
-            # 2. RELATIVE MOTION: delta from calibration pose, scaled
-            delta = (p_human_now - self._human_cal_tips[f]) * self._scale[f]
-            p_target = self._robot_tips_q0[f] + delta
-
-            # 3. Abduction from Ergonomics
+            # Abduction from Ergonomics
             abd_angle = ergonomics[f * 4]
 
-            # 4. Per-finger IK
+            # Per-finger IK
             q_finger = self._solvers[f].solve(
                 p_target=p_target,
                 abd_angle=abd_angle,
@@ -117,6 +90,17 @@ class FingertipIKRetarget(HandRetargetBase):
 
             p_achieved = self._fk.finger_tip_position(q, f)
             self._last_errors[f] = np.linalg.norm(p_target - p_achieved)
+
+            # Debug: first 3 frames, print per-finger info
+            if self._frame_count <= 3:
+                name = ['Thumb', 'Index', 'Middle', 'Ring', 'Pinky'][f]
+                print(f"[2A-dbg] frame={self._frame_count} {name}: "
+                      f"human_local=[{p_human_local[0]:+.4f},{p_human_local[1]:+.4f},{p_human_local[2]:+.4f}] "
+                      f"target=[{p_target[0]:+.4f},{p_target[1]:+.4f},{p_target[2]:+.4f}] "
+                      f"achieved=[{p_achieved[0]:+.4f},{p_achieved[1]:+.4f},{p_achieved[2]:+.4f}] "
+                      f"err={self._last_errors[f]*1000:.1f}mm "
+                      f"q=[{np.degrees(q_finger[0]):+.0f},{np.degrees(q_finger[1]):+.0f},"
+                      f"{np.degrees(q_finger[2]):+.0f},{np.degrees(q_finger[3]):+.0f}]°")
 
         q = np.clip(q, self._fk.q_min, self._fk.q_max)
         q = self._ema.filter(q)
