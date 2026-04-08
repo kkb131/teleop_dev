@@ -45,11 +45,14 @@ class ScaleCalibrator:
         return scales
 
     def _compute_robot_lengths(self) -> np.ndarray:
-        """DG5F palm→tip distances at zero configuration."""
+        """DG5F wrist→tip distances at zero configuration.
+
+        URDF world origin = wrist mount = [0,0,0].
+        """
         q_zero = np.zeros(20)
         tips = self._fk.fingertip_positions(q_zero)
-        palm = self._fk.palm_position(q_zero)
-        return np.array([np.linalg.norm(tips[i] - palm) for i in range(5)])
+        # URDF origin = wrist, so tip positions ARE wrist-relative
+        return np.array([np.linalg.norm(tips[i]) for i in range(5)])
 
     def _compute_human_lengths(self, skeleton: np.ndarray) -> np.ndarray:
         """Manus skeleton wrist→tip distances."""

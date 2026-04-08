@@ -255,3 +255,60 @@ if np.linalg.norm(error) > fallback_threshold:
     return q_fallback  # 1A 결과로 대체
 ```
 - 안전망 역할: IK가 비정상일 때 1A가 보완
+
+---
+
+## Bug #7: Index 안 움직임 + 캘리브레이션 시 전체 손가락 고장 (2026-04-08)
+
+### 증상
+- Index만 모든 관절 0° (음수 해만 도출 → anatomical constraint로 clamp)
+- `--calibrate` 적용 시 5손가락 모두 비정상 동작
+
+### 근본 원인 3가지
+
+**A1. p_target 프레임 오류 (CRITICAL)**
+```python
+# 이전 (잘못됨):
+p_target = R @ p_human_local * scale + palm_offset  # palm_offset 혼합!
+
+# 수정:
+p_target = R @ p_human_local * scale  # URDF origin = wrist = [0,0,0], offset 불필요
+```
+- URDF world origin이 wrist mount point (= [0,0,0])
+- FK 출력도 wrist frame
+- palm_offset을 더하면 프레임 불일치 → IK가 엉뚱한 위치 추적
+
+**A2. SVD reflection (MAJOR)**
+```python
+# 이전: det(R)이 -1일 수 있음 → 축 반전
+d = np.linalg.det(Vt.T @ U.T)
+D = np.diag([1, 1, d])  # d=-1이면 reflection!
+
+# 수정: np.sign(d)로 강제 +1
+D = np.diag([1, 1, np.sign(d)])
+```
+
+**B1. Scale 기준점 불일치**
+```python
+# 이전: palm-relative distance
+palm = self._fk.palm_position(q_zero)
+return [norm(tips[i] - palm) ...]
+
+# 수정: wrist-relative distance (URDF origin = wrist)
+return [norm(tips[i]) ...]  # tips already wrist-relative
+```
+
+**B2. SVD 입력 프레임 불일치**
+```python
+# 이전: human=wrist-rel, robot=palm-rel → 다른 origin
+robot_tips = fk.fingertip_positions(q_zero) - palm_offset
+
+# 수정: 둘 다 wrist-relative
+robot_tips = fk.fingertip_positions(q_zero)  # already wrist-rel
+```
+
+### 적용 결과
+- Spread: MCP/PIP/DIP ≈ 0° (정상)
+- Fist: Index MCP=46°, PIP=26.5° (양수 — 정방향 굽힘)
+- det(R) = +1.0 (pure rotation, no reflection)
+- Mean error: 4.2mm (spread), 18.2mm (fist)
