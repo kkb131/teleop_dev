@@ -8,11 +8,11 @@ import numpy as np
 
 from sender.hand.gen2a_fingertip_ik.dg5f_fk import DG5FKinematics
 
-# Manus Raw Skeleton tip node indices (confirmed from ROS2 topic)
-# [0]=wrist, [1-4]=thumb(CMC,MCP,IP,TIP), [5-8]=index, [9-12]=middle,
-# [13-16]=ring, [17-20]=pinky
-# Tip indices: last node of each finger chain
-MANUS_TIP_INDICES = [4, 8, 12, 16, 20]
+# Manus Raw Skeleton tip node indices (25 nodes total)
+# [0]=wrist, [1-4]=thumb(5 nodes), [5-9]=index(5 nodes), [10-14]=middle,
+# [15-19]=ring, [20-24]=pinky
+# Tip = last node of each 5-node chain
+MANUS_TIP_INDICES = [4, 9, 14, 19, 24]
 
 
 class ScaleCalibrator:
@@ -45,12 +45,11 @@ class ScaleCalibrator:
         return scales
 
     def _compute_robot_lengths(self) -> np.ndarray:
-        """DG5F wrist→tip distances at zero configuration."""
+        """DG5F palm→tip distances at zero configuration."""
         q_zero = np.zeros(20)
         tips = self._fk.fingertip_positions(q_zero)
-        # Use world origin (≈ wrist mount) as reference
-        wrist = np.zeros(3)
-        return np.array([np.linalg.norm(tips[i] - wrist) for i in range(5)])
+        palm = self._fk.palm_position(q_zero)
+        return np.array([np.linalg.norm(tips[i] - palm) for i in range(5)])
 
     def _compute_human_lengths(self, skeleton: np.ndarray) -> np.ndarray:
         """Manus skeleton wrist→tip distances."""
