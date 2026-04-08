@@ -166,8 +166,9 @@ def main():
                         choices=["subprocess", "ros2"],
                         help="SDK mode: subprocess=SDKClient binary, ros2=manus_ros2 topics (default: from config)")
     parser.add_argument("--retarget", default="none",
-                        choices=["none", "vector", "direct"],
-                        help="Retarget mode: none=raw, vector=optimization, direct=angle mapping")
+                        choices=["none", "vector", "direct", "ergo-direct"],
+                        help="Retarget mode: none=raw, ergo-direct=[1A] ergonomics direct, "
+                             "vector=optimization(legacy), direct=angle mapping(legacy)")
     parser.add_argument("--calibrate", action="store_true",
                         help="Calibrate baseline at startup (hold hand flat, fingers together)")
     parser.add_argument("--calibrate-fist", action="store_true",
@@ -203,7 +204,19 @@ def main():
 
     # Retarget setup
     retarget = None
-    if args.retarget != "none":
+    _retarget_uses_ergonomics = False  # True if retarget takes ergonomics, not skeleton
+
+    if args.retarget == "ergo-direct":
+        import numpy as np
+        from sender.hand.gen1a_ergo_direct import ErgoDirectRetarget
+        retarget = ErgoDirectRetarget(
+            hand_side=hand_side if hand_side != "both" else "right",
+        )
+        _retarget_uses_ergonomics = True
+        print(f"[Sender] Retarget: 1A-ergo-direct ({hand_side})")
+
+    elif args.retarget in ("vector", "direct"):
+        # Legacy modes (skeleton-based)
         import numpy as np
         from sender.hand.retarget import create_retarget
         retarget = create_retarget(
@@ -212,11 +225,10 @@ def main():
             urdf_path=args.urdf,
             config_path=args.retarget_config,
         )
-        print(f"[Sender] Retarget: {args.retarget} ({hand_side})")
+        print(f"[Sender] Retarget: {args.retarget} ({hand_side}) [legacy]")
 
         if args.calibrate:
-            print("[Sender] Calibrating baseline — hold hand OPEN, fingers SPREAD...")
-            print("[Sender] Recording for 3 seconds...")
+            print("[Sender] Calibrating baseline — hold hand OPEN...")
             time.sleep(1.0)
             samples = []
             cal_start = time.time()
@@ -228,9 +240,6 @@ def main():
             if samples:
                 baseline = np.mean(samples, axis=0)
                 retarget.calibrate_baseline(baseline)
-                print(f"[Sender] Baseline recorded ({len(samples)} samples)")
-            else:
-                print("[Sender] WARNING: No skeleton data!")
 
         if args.calibrate_fist and hasattr(retarget, 'calibrate_fist_from_frames'):
             print("[Sender] Now make a FIST — recording for 3 seconds...")
@@ -244,12 +253,8 @@ def main():
                 time.sleep(0.016)
             if samples:
                 retarget.calibrate_fist_from_frames(samples)
-                print(f"[Sender] Fist calibrated ({len(samples)} samples)")
-
-                # Save config for direct mode
                 if hasattr(retarget, 'save_config'):
-                    save_path = args.retarget_config or "sender/hand/retarget/config/direct_mapping.yaml"
-                    retarget.save_config(save_path)
+                    retarget.save_config(args.retarget_config or "sender/hand/retarget/config/direct_mapping.yaml")
 
     # Start keyboard listener
     kb = KeyboardState()
@@ -277,17 +282,29 @@ def main():
                 print("\n[Sender] Quit requested")
                 break
 
-            # Read glove data
+            # Read glove data + apply retarget
+            def _apply_retarget(data):
+                """Apply retarget to HandData, return retargeted flag."""
+                if retarget is None:
+                    return False
+                if _retarget_uses_ergonomics:
+                    # [1A] ergo-direct: uses joint_angles directly
+                    dg5f_q = retarget.retarget(ergonomics=data.joint_angles)
+                    data.joint_angles = dg5f_q.astype(np.float32)
+                    return True
+                elif data.skeleton is not None:
+                    # Legacy: uses skeleton
+                    dg5f_q = retarget.retarget(data.skeleton)
+                    data.joint_angles = dg5f_q.astype(np.float32)
+                    return True
+                return False
+
             if hand_side == "both":
                 hands = reader.get_both_hands()
                 for side, data in hands.items():
                     if data is not None:
-                        if retarget is not None and data.skeleton is not None:
-                            import numpy as np
-                            dg5f_q = retarget.retarget(data.skeleton)
-                            data.joint_angles = dg5f_q.astype(np.float32)
-                        pkt = _build_packet(data, buttons,
-                                            retargeted=(retarget is not None and data.has_skeleton))
+                        is_rt = _apply_retarget(data)
+                        pkt = _build_packet(data, buttons, retargeted=is_rt)
                         if lost_count > 0:
                             print(f"\n[Sender] {side} tracking recovered")
                     else:
@@ -298,12 +315,8 @@ def main():
             else:
                 data = reader.get_hand_data()
                 if data is not None:
-                    if retarget is not None and data.skeleton is not None:
-                        import numpy as np
-                        dg5f_q = retarget.retarget(data.skeleton)
-                        data.joint_angles = dg5f_q.astype(np.float32)
-                    pkt = _build_packet(data, buttons,
-                                        retargeted=(retarget is not None and data.has_skeleton))
+                    is_rt = _apply_retarget(data)
+                    pkt = _build_packet(data, buttons, retargeted=is_rt)
                     if lost_count > 0:
                         print(f"\n[Sender] Tracking recovered (was lost for {lost_count} frames)")
                         lost_count = 0

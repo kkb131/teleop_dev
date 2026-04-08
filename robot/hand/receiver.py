@@ -217,11 +217,17 @@ def main():
     print("  Controls: Ctrl+C = Quit")
     print("=" * 70)
 
-    # Setup retarget
-    retarget = ManusToD5FRetarget(
-        hand_side=cfg.hand.side,
-        calibration_factors=cfg.retarget.calibration_factors,
-    )
+    # Setup retarget (fallback for when sender sends raw ergonomics)
+    try:
+        from sender.hand.gen1a_ergo_direct import ErgoDirectRetarget
+        retarget = ErgoDirectRetarget(hand_side=cfg.hand.side)
+        print("  [Retarget] Using 1A-ergo-direct (fallback for raw mode)")
+    except ImportError:
+        retarget = ManusToD5FRetarget(
+            hand_side=cfg.hand.side,
+            calibration_factors=cfg.retarget.calibration_factors,
+        )
+        print("  [Retarget] Using legacy ManusToD5FRetarget (fallback)")
 
     # Setup ROS2 client (unless dry-run)
     client = None
@@ -286,11 +292,18 @@ def main():
             if data is not None and data is not last_data:
                 last_data = data
 
-                # Retarget (skip if sender already applied vector retarget)
+                # Retarget (skip if sender already applied retarget)
                 if receiver.is_retargeted:
                     dg5f_raw = data.joint_angles
                 else:
-                    dg5f_raw = retarget.retarget(data.joint_angles)
+                    # Fallback: apply retarget on receiver side
+                    if hasattr(retarget, 'retarget'):
+                        try:
+                            dg5f_raw = retarget.retarget(ergonomics=data.joint_angles)
+                        except TypeError:
+                            dg5f_raw = retarget.retarget(data.joint_angles)
+                    else:
+                        dg5f_raw = data.joint_angles
 
                 # EMA filter on retarget OUTPUT to reduce jitter
                 if filtered_dg5f is None:

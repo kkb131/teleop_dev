@@ -28,3 +28,4 @@ sender/hand/sdk/SDKClient_Linux/*.o
 
 # Docker build context artifacts
 .docker/
+sender/hand/sdk/ROS2/ManusSDK/lib/*.so
