@@ -189,3 +189,69 @@ python3 -m sender.hand.manus_sender --retarget fingertip-ik --sdk-mode ros2 \
   --target-ip <IP> --calibrate
 # receiver에서: MCP/PIP/DIP ≈ 0, Spread만 변화
 ```
+
+---
+
+## Bug #6: Fist 시 역방향 굽힘 (2026-04-08)
+
+### 증상
+
+Spread는 동작하지만, fist 시 Index/Middle의 PIP/DIP가 **음수(역방향)** → 손등 뒤로 꺾임.
+
+### 원인
+
+URDF에서 PIP/DIP 관절 한계가 `(-π/2, +π/2)` → 음수도 허용.
+DLS IK solver는 최소 노름 해를 찾으면서 음수 방향으로 수렴할 수 있음.
+실제 인간 손가락은 **양수 방향(fist)으로만** 굽혀야 함.
+
+### 해결책 목록
+
+| 방안 | 방법 | 난이도 | 효과 | 상태 |
+|------|------|--------|------|------|
+| **A. Anatomical constraints** | IK solver에 해부학적 제약 추가: Index~Pinky MCP/PIP/DIP ≥ 0 | ★★ | ★★★★ | **적용됨** |
+| B. Posture prior | IK cost에 `‖q - q_prior‖²` 항 추가. q_prior = ergonomics 기반 추정 | ★★★ | ★★★★★ | Phase 2 |
+| C. PIP/DIP coupling | DIP = α × PIP (α≈0.6~0.8). 자유도 3→2로 감소 → IK 안정화 | ★★★ | ★★★★ | Phase 2 |
+| D. Ergonomics fallback | IK 수렴 실패 시 1A(ergo-direct)로 폴백 | ★★ | ★★★ | Phase 2 |
+
+### A. Anatomical constraints (적용됨)
+
+`per_finger_ik.py`에서 Index~Pinky의 MCP/PIP/DIP 하한을 0으로 설정:
+
+```python
+if finger_idx >= 1:  # Index ~ Pinky
+    self._q_min[1] = max(self._q_min[1], 0.0)  # MCP ≥ 0
+    self._q_min[2] = max(self._q_min[2], 0.0)  # PIP ≥ 0
+    self._q_min[3] = max(self._q_min[3], 0.0)  # DIP ≥ 0
+```
+
+Thumb(idx=0)은 비평면 축(X-Z-X-X)이므로 기존 URDF 한계 유지.
+
+### B. Posture prior (Phase 2 예정)
+
+IK cost를 수정:
+```
+cost = ‖p_target - FK(q)‖² + λ_prior · ‖q - q_prior‖²
+```
+- `q_prior`: Manus ergonomics에서 추정한 관절각 (1A의 ErgoDirectRetarget 출력)
+- 효과: IK가 "인간다운" 자세를 선호하게 유도
+- DexPilot/AnyTeleop에서 사용하는 방법
+
+### C. PIP/DIP coupling (Phase 2 예정)
+
+인간 손가락의 해부학적 특성:
+- DIP ≈ 0.6~0.8 × PIP (동시에 굽힘)
+- 자유도를 3-DOF → 2-DOF로 줄임:
+  ```
+  q = [abd, MCP, PIP]  # DIP = 0.7 * PIP (자동)
+  ```
+- IK가 더 안정적이고 자연스러운 해를 찾음
+
+### D. Ergonomics fallback (Phase 2 예정)
+
+IK 수렴 실패 (error > threshold) 시:
+```python
+if np.linalg.norm(error) > fallback_threshold:
+    q_fallback = ergo_direct.retarget(ergonomics=ergo)
+    return q_fallback  # 1A 결과로 대체
+```
+- 안전망 역할: IK가 비정상일 때 1A가 보완

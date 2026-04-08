@@ -35,10 +35,21 @@ class PerFingerIK:
         self._max_iter = max_iter
         self._tol = tol
 
-        # Per-finger joint limits (4 joints)
+        # Per-finger joint limits (4 joints) from URDF
         base = finger_idx * 4
-        self._q_min = fk.q_min[base:base + 4]
-        self._q_max = fk.q_max[base:base + 4]
+        self._q_min = fk.q_min[base:base + 4].copy()
+        self._q_max = fk.q_max[base:base + 4].copy()
+
+        # Anatomical constraints: prevent backward bending
+        # Index(1), Middle(2), Ring(3), Pinky(4): MCP/PIP/DIP flexion ≥ 0
+        # Thumb(0): non-planar axes, keep URDF limits
+        if finger_idx >= 1:  # Index ~ Pinky
+            # Joint 1 (MCP flex): ≥ 0 (no hyperextension)
+            self._q_min[1] = max(self._q_min[1], 0.0)
+            # Joint 2 (PIP flex): ≥ 0
+            self._q_min[2] = max(self._q_min[2], 0.0)
+            # Joint 3 (DIP flex): ≥ 0
+            self._q_min[3] = max(self._q_min[3], 0.0)
 
     def solve(self, p_target: np.ndarray, abd_angle: float,
               q_init: np.ndarray = None, q_full: np.ndarray = None) -> np.ndarray:
