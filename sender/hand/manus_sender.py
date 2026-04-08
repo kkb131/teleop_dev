@@ -19,6 +19,10 @@ Usage:
     # [1A] + 2포즈 캘리브레이션 (open hand → fist)
     python3 -m sender.hand.manus_sender --target-ip <ROBOT_IP> --hand right \
         --retarget ergo-direct --sdk-mode ros2 --calibrate
+
+    # [2A] Fingertip IK (skeleton + ergonomics)
+    python3 -m sender.hand.manus_sender --target-ip <ROBOT_IP> --hand right \
+        --retarget fingertip-ik --sdk-mode ros2 --calibrate
 """
 
 import argparse
@@ -168,8 +172,8 @@ def main():
                         choices=["subprocess", "ros2"],
                         help="SDK mode: subprocess=SDKClient binary, ros2=manus_ros2 topics (default: from config)")
     parser.add_argument("--retarget", default="none",
-                        choices=["none", "ergo-direct"],
-                        help="Retarget mode: none=raw ergonomics, ergo-direct=[1A] DG5F direct mapping")
+                        choices=["none", "ergo-direct", "fingertip-ik"],
+                        help="Retarget mode: none=raw, ergo-direct=[1A], fingertip-ik=[2A]")
     parser.add_argument("--calibrate", action="store_true",
                         help="2-pose calibration at startup (open hand + fist)")
     args = parser.parse_args()
@@ -249,6 +253,33 @@ def main():
 
             print("\n[1A-Cal] Calibration complete!\n")
 
+    elif args.retarget == "fingertip-ik":
+        import numpy as np
+        from sender.hand.gen2a_fingertip_ik import FingertipIKRetarget
+        retarget = FingertipIKRetarget(
+            hand_side=hand_side if hand_side != "both" else "right",
+        )
+        print(f"[Sender] Retarget: 2A-fingertip-ik ({hand_side})")
+
+        if args.calibrate:
+            print("\n[2A-Cal] Hold hand FULLY OPEN for 3 seconds...")
+            time.sleep(2.0)
+            print("[2A-Cal] Recording skeleton...")
+            samples = []
+            cal_start = time.time()
+            while time.time() - cal_start < 3.0:
+                data = reader.get_hand_data()
+                if data is not None and data.skeleton is not None:
+                    samples.append(data.skeleton.copy())
+                time.sleep(0.016)
+            if samples:
+                import numpy as np
+                baseline = np.mean(samples, axis=0)
+                retarget.calibrate(skeleton=baseline)
+                print(f"[2A-Cal] Calibrated ({len(samples)} samples)")
+            else:
+                print("[2A-Cal] WARNING: No skeleton data! Using default scale.")
+
     # Start keyboard listener
     kb = KeyboardState()
     kb.start()
@@ -280,7 +311,11 @@ def main():
                 """Apply retarget to HandData, return retargeted flag."""
                 if retarget is None:
                     return False
-                dg5f_q = retarget.retarget(ergonomics=data.joint_angles)
+                # Pass both skeleton and ergonomics (2A uses both, 1A ignores skeleton)
+                kwargs = {"ergonomics": data.joint_angles}
+                if data.skeleton is not None:
+                    kwargs["skeleton"] = data.skeleton
+                dg5f_q = retarget.retarget(**kwargs)
                 data.joint_angles = dg5f_q.astype(np.float32)
                 return True
 
