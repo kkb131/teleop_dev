@@ -27,10 +27,18 @@ class FingertipIKRetarget(HandRetargetBase):
         self._fk = DG5FKinematics(hand_side)
         self._solvers = [PerFingerIK(self._fk, i, damping) for i in range(5)]
 
-        # 853c174 strategy: R=I, scale=1, +palm_offset
+        # Axis mapping: Manus → DG5F (verified from real data)
+        # DG5F_X = Manus_Y, DG5F_Y = -Manus_X, DG5F_Z = Manus_Z
+        # = Z-axis 90° rotation
+        self._R = np.array([
+            [0,  1, 0],
+            [-1, 0, 0],
+            [0,  0, 1],
+        ], dtype=np.float64)
+
         self._scale = np.ones(5)
         self._palm_offset = self._fk.palm_position(np.zeros(NUM_JOINTS))
-        self._is_calibrated = False  # stays False unless --calibrate
+        self._is_calibrated = False
 
         self._q_prev = np.zeros(NUM_JOINTS)
         self._ema = EMAFilter(alpha=ema_alpha, size=NUM_JOINTS)
@@ -72,9 +80,10 @@ class FingertipIKRetarget(HandRetargetBase):
             if tip_idx >= len(skeleton):
                 continue
 
-            # 853c174 formula: p_human_local * scale + palm_offset
+            # Manus→DG5F: rotate axes + scale + palm offset
             p_human_local = skeleton[tip_idx, :3] - wrist
-            p_target = p_human_local * self._scale[f] + self._palm_offset
+            p_rotated = self._R @ p_human_local
+            p_target = p_rotated * self._scale[f] + self._palm_offset
 
             # Abduction from Ergonomics
             abd_angle = ergonomics[f * 4]
@@ -95,9 +104,9 @@ class FingertipIKRetarget(HandRetargetBase):
             if self._frame_count <= 3:
                 name = ['Thumb', 'Index', 'Middle', 'Ring', 'Pinky'][f]
                 print(f"[2A-dbg] frame={self._frame_count} {name}: "
-                      f"human_local=[{p_human_local[0]:+.4f},{p_human_local[1]:+.4f},{p_human_local[2]:+.4f}] "
+                      f"manus=[{p_human_local[0]:+.4f},{p_human_local[1]:+.4f},{p_human_local[2]:+.4f}] "
+                      f"rotated=[{p_rotated[0]:+.4f},{p_rotated[1]:+.4f},{p_rotated[2]:+.4f}] "
                       f"target=[{p_target[0]:+.4f},{p_target[1]:+.4f},{p_target[2]:+.4f}] "
-                      f"achieved=[{p_achieved[0]:+.4f},{p_achieved[1]:+.4f},{p_achieved[2]:+.4f}] "
                       f"err={self._last_errors[f]*1000:.1f}mm "
                       f"q=[{np.degrees(q_finger[0]):+.0f},{np.degrees(q_finger[1]):+.0f},"
                       f"{np.degrees(q_finger[2]):+.0f},{np.degrees(q_finger[3]):+.0f}]°")
