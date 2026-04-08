@@ -1,35 +1,28 @@
 #!/usr/bin/env python3
 """Manus UDP receiver → DG5F PID controller (MultiDOFCommand).
 
-Receives Manus glove data via UDP (from manus_sender on operator PC),
-retargets joint angles to DG5F motor commands, and publishes via
-MultiDOFCommand to pid_controller/PidController.
-
-Two retarget modes (auto-detected via packet "retargeted" flag):
-  - sender raw mode: receiver applies ManusToD5FRetarget + EMA filter
-  - sender vector mode: sender already computed DG5F angles, receiver passes through
-
-Supports hot-reload of calibration via {"type":"reload_config"} UDP trigger.
+Receives DG5F joint angles via UDP from manus_sender on operator PC
+and publishes to pid_controller/PidController. Sender handles all
+retargeting — receiver is passthrough with EMA smoothing.
 
 Requires dg5f_driver (PID mode) running:
     ros2 launch dg5f_driver dg5f_right_pid_all_controller.launch.py delto_ip:=169.254.186.72
 
 Usage:
-    # Dry-run (no hardware — just receive + retarget + print):
+    # Dry-run (no hardware — just receive + print):
     python3 -m robot.hand.receiver --dry-run
 
     # ROS2 mode (dg5f_driver pid_all must be running):
     python3 -m robot.hand.receiver --hand right
 
-    # With config file:
-    python3 -m robot.hand.receiver --config config/default.yaml
+    # Custom port / rate:
+    python3 -m robot.hand.receiver --hand right --port 9872 --hz 60
 """
 
 import argparse
 import json
 import signal
 import socket
-import sys
 import threading
 import time
 from typing import Optional
@@ -37,8 +30,6 @@ from typing import Optional
 import numpy as np
 
 from protocol.hand_protocol import HandData, NUM_JOINTS, NUM_FINGERS
-from robot.hand.retarget import ManusToD5FRetarget
-from robot.hand.tesollo_config import TesolloConfig
 
 
 # ─────────────────────────────────────────────────────────
@@ -46,10 +37,7 @@ from robot.hand.tesollo_config import TesolloConfig
 # ─────────────────────────────────────────────────────────
 
 class ManusReceiver:
-    """Receives Manus glove UDP packets in a background thread.
-
-    Thread-safe: get_latest() returns the most recent HandData.
-    """
+    """Receives Manus glove UDP packets in a background thread."""
 
     def __init__(self, port: int = 9872, bind_ip: str = "0.0.0.0"):
         self._port = port
@@ -59,8 +47,7 @@ class ManusReceiver:
         self._running = False
         self._pkt_count = 0
         self._last_recv_time = 0.0
-        self._reload_requested = False
-        self._is_retargeted = False  # True if sender already applied retarget
+        self._is_retargeted = False
 
     def start(self):
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -93,26 +80,13 @@ class ManusReceiver:
 
     @property
     def is_retargeted(self) -> bool:
-        """True if the sender already applied retarget (vector mode)."""
         return self._is_retargeted
-
-    @property
-    def reload_requested(self) -> bool:
-        if self._reload_requested:
-            self._reload_requested = False
-            return True
-        return False
 
     def _recv_loop(self):
         while self._running:
             try:
                 raw, _ = self._sock.recvfrom(4096)
                 pkt = json.loads(raw.decode())
-
-                # Handle reload trigger from calibrate_retarget
-                if pkt.get("type") == "reload_config":
-                    self._reload_requested = True
-                    continue
 
                 data = HandData(
                     joint_angles=np.array(pkt["joint_angles"], dtype=np.float32),
@@ -123,13 +97,11 @@ class ManusReceiver:
                     timestamp=pkt.get("timestamp", time.time()),
                 )
 
-                # Track if sender already retargeted
                 self._is_retargeted = pkt.get("retargeted", False)
 
-                # Check e-stop
                 buttons = pkt.get("buttons", {})
                 if buttons.get("estop", False):
-                    data = None  # Suppress data on e-stop
+                    data = None
 
                 with self._lock:
                     self._latest = data
@@ -138,30 +110,26 @@ class ManusReceiver:
 
             except socket.timeout:
                 continue
-            except json.JSONDecodeError:
-                continue
-            except Exception:
+            except (json.JSONDecodeError, KeyError, Exception):
                 continue
 
 
 # ─────────────────────────────────────────────────────────
-# Control loop
+# Display
 # ─────────────────────────────────────────────────────────
 
 def _print_status(data: HandData, dg5f_angles: np.ndarray, hz: float,
                   pkt_count: int, frame: int, is_retargeted: bool = False):
-    """Print compact status to terminal."""
     if frame > 0:
-        # Move cursor up to overwrite
         print(f"\033[8A", end="")
 
-    mode_str = "VECTOR (bypass)" if is_retargeted else "RAW (retarget)"
+    mode_str = "RETARGETED (passthrough)" if is_retargeted else "RAW (no retarget)"
     print(f"  Frame: {frame:6d} | Pkts: {pkt_count:6d} | Rate: {hz:.1f} Hz")
     print(f"  Hand: {data.hand_side.upper()} | Mode: {mode_str}")
 
-    ab = ("R", "O") if is_retargeted else ("M", "D")
+    ab = ("Recv", "Send") if is_retargeted else ("Raw", "Send")
     joint_labels = ["Spread", "MCP", "PIP", "DIP"]
-    header_parts = [f"{jl:>5s}({ab[0]}/{ab[1]})" for jl in joint_labels]
+    header_parts = [f"{jl:>4s}({ab[0][0]}/{ab[1][0]})" for jl in joint_labels]
     print(f"  {'Finger':8s} {'  '.join(header_parts)}")
 
     finger_names = ["Thumb", "Index", "Middle", "Ring", "Pinky"]
@@ -169,65 +137,43 @@ def _print_status(data: HandData, dg5f_angles: np.ndarray, hz: float,
         b = f * 4
         parts = []
         for j in range(4):
-            m_val = data.joint_angles[b + j]
-            d_val = dg5f_angles[b + j]
-            parts.append(f"{m_val:+6.2f}/{d_val:+6.2f}")
+            r_val = data.joint_angles[b + j]
+            s_val = dg5f_angles[b + j]
+            parts.append(f"{r_val:+6.2f}/{s_val:+6.2f}")
         print(f"  {finger_names[f]:8s} {'  '.join(parts)}")
 
 
+# ─────────────────────────────────────────────────────────
+# Main
+# ─────────────────────────────────────────────────────────
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Manus → DG5F retarget receiver (ROS2)"
+        description="Manus → DG5F receiver (passthrough + EMA)"
     )
-    parser.add_argument("--config", default=None,
-                        help="YAML config file path")
-    parser.add_argument("--port", type=int, default=None,
-                        help="UDP listen port (overrides config)")
-    parser.add_argument("--hand", default=None,
+    parser.add_argument("--port", type=int, default=9872,
+                        help="UDP listen port")
+    parser.add_argument("--hand", default="right",
                         choices=["left", "right"],
-                        help="Hand side (overrides config)")
-    parser.add_argument("--hz", type=int, default=None,
-                        help="Control loop Hz (overrides config)")
+                        help="Hand side")
+    parser.add_argument("--hz", type=int, default=60,
+                        help="Control loop Hz")
     parser.add_argument("--dry-run", action="store_true",
-                        help="No ROS2 publishing — just receive + retarget + print")
-    parser.add_argument("--motion-time", type=int, default=None,
-                        help="Per-joint motion time in ms (overrides config)")
+                        help="No ROS2 publishing — just receive + print")
+    parser.add_argument("--motion-time", type=int, default=50,
+                        help="Per-joint motion time in ms")
+    parser.add_argument("--ema-alpha", type=float, default=0.3,
+                        help="EMA filter alpha (0=frozen, 1=no filter)")
     args = parser.parse_args()
 
-    # Load config
-    cfg = TesolloConfig.load(args.config)
-
-    # CLI overrides
-    if args.port is not None:
-        cfg.network.listen_port = args.port
-    if args.hand is not None:
-        cfg.hand.side = args.hand
-    if args.hz is not None:
-        cfg.control.hz = args.hz
-    if args.motion_time is not None:
-        cfg.control.motion_time_ms = args.motion_time
-
     print("=" * 70)
-    print("  Manus → DG5F Retarget Receiver (ROS2)")
+    print("  Manus → DG5F Receiver (passthrough + EMA)")
     print(f"  Mode: {'DRY RUN' if args.dry_run else 'LIVE (ROS2)'}")
-    print(f"  UDP: {cfg.network.listen_ip}:{cfg.network.listen_port}")
-    if not args.dry_run:
-        print(f"  Hand: {cfg.hand.side}")
-    print(f"  Rate: {cfg.control.hz} Hz | Motion time: {cfg.control.motion_time_ms} ms")
+    print(f"  UDP: 0.0.0.0:{args.port}")
+    print(f"  Hand: {args.hand}")
+    print(f"  Rate: {args.hz} Hz | Motion time: {args.motion_time} ms | EMA: {args.ema_alpha}")
     print("  Controls: Ctrl+C = Quit")
     print("=" * 70)
-
-    # Setup retarget (fallback for when sender sends raw ergonomics)
-    try:
-        from sender.hand.gen1a_ergo_direct import ErgoDirectRetarget
-        retarget = ErgoDirectRetarget(hand_side=cfg.hand.side)
-        print("  [Retarget] Using 1A-ergo-direct (fallback for raw mode)")
-    except ImportError:
-        retarget = ManusToD5FRetarget(
-            hand_side=cfg.hand.side,
-            calibration_factors=cfg.retarget.calibration_factors,
-        )
-        print("  [Retarget] Using legacy ManusToD5FRetarget (fallback)")
 
     # Setup ROS2 client (unless dry-run)
     client = None
@@ -236,16 +182,13 @@ def main():
         rclpy.init()
         from robot.hand.dg5f_ros2_client import DG5FROS2Client
         client = DG5FROS2Client(
-            hand_side=cfg.hand.side,
-            motion_time_ms=cfg.control.motion_time_ms,
+            hand_side=args.hand,
+            motion_time_ms=args.motion_time,
         )
-        print(f"  [ROS2] DG5FROS2Client initialized ({cfg.hand.side} hand)")
+        print(f"  [ROS2] DG5FROS2Client initialized ({args.hand} hand)")
 
     # Setup UDP receiver
-    receiver = ManusReceiver(
-        port=cfg.network.listen_port,
-        bind_ip=cfg.network.listen_ip,
-    )
+    receiver = ManusReceiver(port=args.port)
     receiver.start()
 
     # Graceful shutdown
@@ -258,54 +201,33 @@ def main():
     signal.signal(signal.SIGINT, _signal_handler)
 
     # Control loop
-    dt = 1.0 / cfg.control.hz
+    dt = 1.0 / args.hz
     frame = 0
     loop_hz = 0.0
     hz_timer = time.time()
-    ema_alpha = 0.2  # EMA smoothing on retarget OUTPUT (0=frozen, 1=no smoothing)
+    ema_alpha = args.ema_alpha
     filtered_dg5f = None
     hz_count = 0
     last_data = None
 
-    print("\n  Waiting for Manus data...\n")
+    print("\n  Waiting for data...\n")
 
     try:
         while not shutdown.is_set():
             t0 = time.perf_counter()
 
-            # Check for config reload trigger
-            if receiver.reload_requested:
-                print("\n\n  [RELOAD] Reloading config...")
-                cfg = TesolloConfig.load(args.config)
-                retarget = ManusToD5FRetarget(
-                    hand_side=cfg.hand.side,
-                    calibration_factors=cfg.retarget.calibration_factors,
-                )
-                filtered_dg5f = None  # reset EMA
-                print("  [RELOAD] Calibration updated!\n")
-
-            # Process ROS2 callbacks (joint_states feedback)
             if client is not None:
+                import rclpy
                 rclpy.spin_once(client, timeout_sec=0)
 
             data = receiver.get_latest()
             if data is not None and data is not last_data:
                 last_data = data
 
-                # Retarget (skip if sender already applied retarget)
-                if receiver.is_retargeted:
-                    dg5f_raw = data.joint_angles
-                else:
-                    # Fallback: apply retarget on receiver side
-                    if hasattr(retarget, 'retarget'):
-                        try:
-                            dg5f_raw = retarget.retarget(ergonomics=data.joint_angles)
-                        except TypeError:
-                            dg5f_raw = retarget.retarget(data.joint_angles)
-                    else:
-                        dg5f_raw = data.joint_angles
+                # Passthrough: use joint_angles directly (sender already retargeted)
+                dg5f_raw = data.joint_angles
 
-                # EMA filter on retarget OUTPUT to reduce jitter
+                # EMA filter to reduce jitter
                 if filtered_dg5f is None:
                     filtered_dg5f = dg5f_raw.copy()
                 else:
@@ -331,7 +253,6 @@ def main():
                               is_retargeted=receiver.is_retargeted)
                 frame += 1
             else:
-                # No new data — check for timeout
                 if receiver.last_recv_time > 0:
                     age = time.time() - receiver.last_recv_time
                     if age > 2.0 and frame > 0:
@@ -346,6 +267,7 @@ def main():
         receiver.stop()
         if client is not None:
             client.destroy_node()
+            import rclpy
             rclpy.shutdown()
 
     print(f"\n  Total frames: {frame}")
