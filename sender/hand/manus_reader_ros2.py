@@ -204,16 +204,28 @@ class ManusReaderROS2:
             ], dtype=np.float32)
 
             # Raw skeleton → ndarray[N, 7] (x, y, z, qw, qx, qy, qz)
+            # IMPORTANT: Use node_id as index, NOT insertion order
+            # Manus may send nodes in arbitrary order
             skeleton = None
             has_skeleton = False
             if msg.raw_nodes and len(msg.raw_nodes) > 0:
-                skel_list = []
+                max_id = max(node.node_id for node in msg.raw_nodes)
+                skel_arr = np.zeros((max_id + 1, 7), dtype=np.float32)
                 for node in msg.raw_nodes:
                     p = node.pose.position
                     q = node.pose.orientation
-                    skel_list.append([p.x, p.y, p.z, q.w, q.x, q.y, q.z])
-                skeleton = np.array(skel_list, dtype=np.float32)
+                    skel_arr[node.node_id] = [p.x, p.y, p.z, q.w, q.x, q.y, q.z]
+                skeleton = skel_arr
                 has_skeleton = True
+
+                # Log skeleton info once
+                if self._line_count == 0:
+                    print(f"[ManusROS2] Skeleton: {len(msg.raw_nodes)} nodes, "
+                          f"max_id={max_id}, array shape={skeleton.shape}")
+                    # Print node_id → joint_type mapping for first 5 nodes
+                    for node in sorted(msg.raw_nodes, key=lambda n: n.node_id)[:10]:
+                        print(f"  node[{node.node_id:2d}]: joint={node.joint_type}, "
+                              f"chain={node.chain_type}")
 
             # Wrist from first skeleton node (if available)
             wrist_pos = np.zeros(3, dtype=np.float32)

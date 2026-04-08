@@ -275,10 +275,21 @@ def main():
             if samples:
                 import numpy as np
                 baseline = np.mean(samples, axis=0)
+                print(f"[2A-Cal] Skeleton shape: {baseline.shape}, "
+                      f"nodes: {baseline.shape[0]}")
+                # Print tip node distances for debugging
+                from sender.hand.gen2a_fingertip_ik.scale_calibrator import MANUS_TIP_INDICES
+                wrist = baseline[0, :3]
+                for i, idx in enumerate(MANUS_TIP_INDICES):
+                    if idx < len(baseline):
+                        d = np.linalg.norm(baseline[idx, :3] - wrist)
+                        print(f"  Tip[{idx}] dist={d:.4f}m")
+                    else:
+                        print(f"  Tip[{idx}] OUT OF RANGE (skeleton has {len(baseline)} nodes)")
                 retarget.calibrate(skeleton=baseline)
                 print(f"[2A-Cal] Calibrated ({len(samples)} samples)")
             else:
-                print("[2A-Cal] WARNING: No skeleton data! Using default scale.")
+                print("[2A-Cal] WARNING: No skeleton data! Auto-calibrate on first frame.")
 
     # Start keyboard listener
     kb = KeyboardState()

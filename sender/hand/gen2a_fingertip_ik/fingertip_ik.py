@@ -137,6 +137,13 @@ class FingertipIKRetarget(HandRetargetBase):
         if skeleton is None or ergonomics is None:
             return self._q_prev.copy()
 
+        # Auto-calibrate from first valid skeleton (prevents fist default)
+        if not self._is_calibrated:
+            max_idx = max(MANUS_TIP_INDICES)
+            if len(skeleton) > max_idx:
+                print("[2A] Auto-calibrating from first skeleton frame...")
+                self.calibrate(skeleton=skeleton)
+
         wrist = skeleton[0, :3]
         q = self._q_prev.copy()
 
