@@ -1,0 +1,14 @@
+retargeting:
+  type: DexPilot
+  urdf_path: dg5f_right_retarget.urdf  # resolved by DexRetargetWrapper relative to this file
+
+  wrist_link_name: "rl_dg_palm"
+  finger_tip_link_names:
+    - "rl_dg_1_tip"  # Thumb
+    - "rl_dg_2_tip"  # Index
+    - "rl_dg_3_tip"  # Middle
+    - "rl_dg_4_tip"  # Ring
+    - "rl_dg_5_tip"  # Pinky
+
+  scaling_factor: 1.2
+  low_pass_alpha: 0.2

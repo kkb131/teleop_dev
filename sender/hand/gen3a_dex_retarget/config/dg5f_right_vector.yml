@@ -1,0 +1,66 @@
+retargeting:
+  type: vector
+  urdf_path: dg5f_right_retarget.urdf  # resolved by DexRetargetWrapper relative to this file
+
+  # A. 관절 간 벡터 (bone-level 제어) — 각 손가락의 MCP→TIP 방향
+  target_origin_link_names:
+    # 기존 palm→tip (5개)
+    - "rl_dg_palm"
+    - "rl_dg_palm"
+    - "rl_dg_palm"
+    - "rl_dg_palm"
+    - "rl_dg_palm"
+    # MCP→PIP 벡터 (5개 추가) — 손가락 중간부 방향 제어
+    - "rl_dg_1_2"   # Thumb MCP
+    - "rl_dg_2_2"   # Index MCP
+    - "rl_dg_3_2"   # Middle MCP
+    - "rl_dg_4_2"   # Ring MCP
+    - "rl_dg_5_2"   # Pinky MCP
+
+  target_task_link_names:
+    - "rl_dg_1_tip"
+    - "rl_dg_2_tip"
+    - "rl_dg_3_tip"
+    - "rl_dg_4_tip"
+    - "rl_dg_5_tip"
+    - "rl_dg_1_4"   # Thumb DIP link
+    - "rl_dg_2_4"   # Index DIP link
+    - "rl_dg_3_4"   # Middle DIP link
+    - "rl_dg_4_4"   # Ring DIP link
+    - "rl_dg_5_4"   # Pinky DIP link
+
+  target_link_human_indices:
+    - [0, 0, 0, 0, 0, 2, 6, 10, 14, 18]   # origins: wrist x5, then MCP x5
+    - [4, 8, 12, 16, 20, 3, 7, 11, 15, 19] # tasks: tip x5, then PIP x5
+
+  # target_link_human_indices:
+  #   - [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+  #   - [4, 8, 12, 16, 20, 2, 6, 10, 14, 18]
+
+  scaling_factor: 1.2
+  low_pass_alpha: 0.2    
+
+
+  # # 5 fingers: palm → fingertip vectors
+  # target_origin_link_names:
+  #   - "rl_dg_palm"   # Thumb
+  #   - "rl_dg_palm"   # Index
+  #   - "rl_dg_palm"   # Middle
+  #   - "rl_dg_palm"   # Ring
+  #   - "rl_dg_palm"   # Pinky
+
+  # target_task_link_names:
+  #   - "rl_dg_1_tip"  # Thumb tip
+  #   - "rl_dg_2_tip"  # Index tip
+  #   - "rl_dg_3_tip"  # Middle tip
+  #   - "rl_dg_4_tip"  # Ring tip
+  #   - "rl_dg_5_tip"  # Pinky tip
+
+  # # Human MANO indices: [[origins], [tasks]]
+  # # Origin=0 (wrist), Tasks=4,8,12,16,20 (fingertips)
+  # target_link_human_indices:
+  #   - [0, 0, 0, 0, 0]
+  #   - [4, 8, 12, 16, 20]
+
+  # scaling_factor: 1.0
+  # low_pass_alpha: 0.2

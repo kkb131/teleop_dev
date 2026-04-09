@@ -19,6 +19,10 @@ Usage:
     # [1A] + 2포즈 캘리브레이션 (open hand → fist)
     python3 -m sender.hand.manus_sender --target-ip <ROBOT_IP> --hand right \
         --retarget ergo-direct --sdk-mode ros2 --calibrate
+
+    # [3A] dex_retargeting (skeleton-based, DexPilot fingertip optimization)
+    python3 -m sender.hand.manus_sender --target-ip <ROBOT_IP> --hand right \
+        --retarget dex --sdk-mode ros2
 """
 
 import argparse
@@ -168,8 +172,8 @@ def main():
                         choices=["subprocess", "ros2"],
                         help="SDK mode: subprocess=SDKClient binary, ros2=manus_ros2 topics (default: from config)")
     parser.add_argument("--retarget", default="none",
-                        choices=["none", "ergo-direct"],
-                        help="Retarget mode: none=raw, ergo-direct=[1A]")
+                        choices=["none", "ergo-direct", "dex"],
+                        help="Retarget mode: none=raw, ergo-direct=[1A], dex=[3A] dex_retargeting")
     parser.add_argument("--calibrate", action="store_true",
                         help="2-pose calibration at startup (open hand + fist)")
     args = parser.parse_args()
@@ -249,6 +253,18 @@ def main():
 
             print("\n[1A-Cal] Calibration complete!\n")
 
+    elif args.retarget == "dex":
+        if sdk_mode != "ros2":
+            print("[ERROR] --retarget dex requires --sdk-mode ros2 "
+                  "(skeleton metadata only available via manus_data_publisher).")
+            return
+        import numpy as np
+        from sender.hand.gen3a_dex_retarget import DexRetargetWrapper
+        retarget = DexRetargetWrapper(
+            hand_side=hand_side if hand_side != "both" else "right",
+        )
+        print(f"[Sender] Retarget: 3A-dex-retarget ({hand_side})")
+
     # Start keyboard listener
     kb = KeyboardState()
     kb.start()
@@ -280,7 +296,15 @@ def main():
                 """Apply retarget to HandData, return retargeted flag."""
                 if retarget is None:
                     return False
-                dg5f_q = retarget.retarget(ergonomics=data.joint_angles)
+                method = retarget.get_method_name()
+                if method.startswith("1A"):
+                    dg5f_q = retarget.retarget(ergonomics=data.joint_angles)
+                elif method.startswith("3A"):
+                    if not data.has_skeleton:
+                        return False  # skip frame, hold last pose
+                    dg5f_q = retarget.retarget(skeleton=data.skeleton)
+                else:
+                    return False
                 data.joint_angles = dg5f_q.astype(np.float32)
                 return True
 

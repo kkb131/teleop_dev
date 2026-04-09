@@ -55,13 +55,20 @@ _ANSI_BYTES_RE = re.compile(rb'\x1b\[[0-9;]*[A-Za-z]')
 
 @dataclass
 class HandData:
-    """Hand tracking data from a single Manus glove."""
+    """Hand tracking data from a single Manus glove.
+
+    `skeleton` / `has_skeleton` are populated only by skeleton-aware readers
+    (e.g. ManusReaderROS2 with the gen3a_dex_retarget remap helper). The
+    subprocess SDK reader leaves them at their defaults.
+    """
     joint_angles: np.ndarray = field(default_factory=lambda: np.zeros(NUM_JOINTS))
     finger_spread: np.ndarray = field(default_factory=lambda: np.zeros(NUM_FINGERS))
     wrist_pos: np.ndarray = field(default_factory=lambda: np.zeros(3))
     wrist_quat: np.ndarray = field(default_factory=lambda: np.array([1.0, 0, 0, 0]))
     hand_side: str = "right"
     timestamp: float = 0.0
+    skeleton: Optional[np.ndarray] = None  # (21, 7) MANO 21-node, [x,y,z,qw,qx,qy,qz]
+    has_skeleton: bool = False
 
 
 class ManusReader:

@@ -21,7 +21,9 @@ dependencies:
   - pip
   - pip:
     - openvr>=1.26.701      # SteamVR / Vive Tracker (vive_sender)
-    - numpy                 # 좌표변환, 쿼터니언 연산
+    - "numpy<2"             # dex_retargeting / pinocchio ABI 호환 (eigenpy 1.x ABI)
     - pynput>=1.7.6         # 키보드 입력 (vive_sender KeyboardStateTracker)
     - pyyaml>=6.0           # Vive/Manus config 파싱
     - pygame>=2.0.0         # 조이스틱/게임패드 입력 (joystick_sender)
+    - dex_retargeting       # [3A] manus_sender --retarget dex (DexPilot/Vector)
+    - "mediapipe==0.10.21"  # dex_retargeting examples 호환 (framework 모듈)

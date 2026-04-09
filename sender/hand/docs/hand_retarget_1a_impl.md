@@ -159,10 +159,16 @@ src/teleop_dev/sender/hand/
 │   ├── __init__.py
 │   └── ergo_direct.py             # ErgoDirectRetarget 클래스
 │
+├── gen3a_dex_retarget/            # [3A] Manus Skeleton → dex_retargeting (DexPilot)
+│   ├── __init__.py
+│   ├── dex_retarget.py            # DexRetargetWrapper 클래스
+│   ├── manus_remap.py             # 25 → 21 MANO 리매핑
+│   ├── config/                    # DG5F URDF + dexpilot/vector YAML
+│   └── docs/dex_retarget_setup.md
+│
 ├── (향후 추가 예정)
 │   gen1b_skeleton_quat/           # [1B] Manus Skeleton → Quat Decomposition
 │   gen1c_mediapipe_angles/        # [1C] MediaPipe → Vector Angles
-│   gen3a_multi_cost/              # [3A] Multi-Cost Optimization
 │   ...
 ```
 

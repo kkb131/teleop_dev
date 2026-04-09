@@ -40,6 +40,16 @@ from sender.hand.manus_reader import (
     FINGER_NAMES, JOINT_NAMES_PER_FINGER,
 )
 
+# Optional: 25→21 MANO skeleton remap helper. Only available when the
+# gen3a_dex_retarget package is importable; we degrade gracefully so the
+# reader works for ergo-only modes (1A, none) without it.
+try:
+    from sender.hand.gen3a_dex_retarget.manus_remap import remap_to_mano_21
+    _SKELETON_REMAP_OK = True
+except ImportError:
+    remap_to_mano_21 = None
+    _SKELETON_REMAP_OK = False
+
 # Ergonomics type string → joint index mapping
 # SDK publishes ergonomics with type strings (e.g., "ThumbCMCSpread", "IndexMCPFlexion")
 # We map these to our 20-joint array: [Thumb(spread,MCP,PIP,DIP), Index(...), ...]
@@ -88,6 +98,10 @@ class ManusReaderROS2:
 
         self._node: Optional[Node] = None
         self._spin_thread: Optional[threading.Thread] = None
+
+        # One-shot diagnostic flags for the 25→21 MANO remap
+        self._remap_logged_ok = False
+        self._remap_logged_fail = False
 
     def connect(self):
         """Initialize ROS2 node and subscribe to manus_glove topics."""
@@ -203,13 +217,32 @@ class ManusReaderROS2:
                 joint_angles[12], joint_angles[16]
             ], dtype=np.float32)
 
+            # Raw skeleton (~25 nodes) → MANO 21-node (21, 7).
+            # Only available when gen3a_dex_retarget package is importable;
+            # otherwise skeleton stays None and only ergo modes will work.
+            skeleton = None
+            has_skeleton = False
+            if (_SKELETON_REMAP_OK and msg.raw_nodes
+                    and len(msg.raw_nodes) > 0):
+                skeleton = remap_to_mano_21(msg.raw_nodes)
+                has_skeleton = skeleton is not None
+                self._diagnose_remap(msg.raw_nodes, skeleton)
+
+            wrist_pos = np.zeros(3, dtype=np.float32)
+            wrist_quat = np.array([1.0, 0, 0, 0], dtype=np.float32)
+            if skeleton is not None and len(skeleton) > 0:
+                wrist_pos = skeleton[0, :3].copy()
+                wrist_quat = skeleton[0, 3:].copy()
+
             hd = HandData(
                 joint_angles=joint_angles,
                 finger_spread=finger_spread,
-                wrist_pos=np.zeros(3, dtype=np.float32),
-                wrist_quat=np.array([1.0, 0, 0, 0], dtype=np.float32),
+                wrist_pos=wrist_pos,
+                wrist_quat=wrist_quat,
                 hand_side=hand_side,
                 timestamp=time.time(),
+                skeleton=skeleton,
+                has_skeleton=has_skeleton,
             )
 
             with self._lock:
@@ -227,6 +260,30 @@ class ManusReaderROS2:
             self._error_count += 1
             if self._verbose:
                 print(f"[ManusROS2] Callback error: {e}")
+
+    def _diagnose_remap(self, raw_nodes, mapped) -> None:
+        """One-shot logging for the 25→21 MANO remap result.
+
+        Logs INFO once on the first successful remap, WARNING once on the
+        first failure (showing which (chain, joint) pairs were received so
+        the user can debug missing fingers / unknown labels).
+        """
+        if mapped is not None and not self._remap_logged_ok:
+            print(
+                f"[ManusROS2] Manus skeleton: {len(raw_nodes)} raw nodes → "
+                f"MANO 21 (remap OK)",
+                flush=True,
+            )
+            self._remap_logged_ok = True
+        elif mapped is None and not self._remap_logged_fail:
+            keys = sorted({(n.chain_type, n.joint_type) for n in raw_nodes})
+            print(
+                f"[ManusROS2] WARNING: Manus skeleton remap incomplete — "
+                f"MANO slots unfilled. Received {len(raw_nodes)} nodes "
+                f"with (chain, joint) pairs: {keys}",
+                flush=True,
+            )
+            self._remap_logged_fail = True
 
 
 # ─────────────────────────────────────────────────────────

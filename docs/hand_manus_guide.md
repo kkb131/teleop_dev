@@ -39,7 +39,26 @@ Manus Quantum Metaglove로 손 동작을 캡처하여 Tesollo DG5F 로봇 핸드
 └────────────────────────────┘             └──────────────────────────────┘
 ```
 
+### Mode C: [3A] dex_retarget (skeleton + DexPilot 최적화, 조종 PC)
+
+```
+조종 PC (Operator)                          로봇 PC (AGX Orin)
+┌────────────────────────────┐             ┌──────────────────────────────┐
+│ manus_data_publisher       │             │ dg5f_driver (pid_all_ctrl)   │
+│   ↓ /manus_glove_*         │             │   ↓                          │
+│ ManusReaderROS2            │             │ ManusReceiver (UDP)          │
+│   + 25→21 MANO remap       │  UDP 9872   │   ↓ (retarget 스킵)          │
+│ DexRetargetWrapper [3A]    │             │ DG5FROS2Client               │
+│   (DexPilot fingertip opt) │             │   ↓ MultiDOFCommand          │
+│   ↓ DG5F angles            │             │ Tesollo DG5F Hand            │
+│ manus_sender.py ───────────┼────────────→│                              │
+│  (retargeted=true)         │             │                              │
+└────────────────────────────┘             └──────────────────────────────┘
+```
+
 > **자동 감지**: packet에 `"retargeted": true`가 있으면 receiver가 retarget을 스킵.
+> [3A] 모드는 manus_data_publisher (ROS2) 가 필수 — subprocess 모드는 skeleton
+> 메타데이터를 출력하지 않음.
 
 ---
 
@@ -336,6 +355,7 @@ UDP 수신 + retarget 결과만 출력, ROS2 발행 안 함.
 | 스트림 | 데이터 | 용도 |
 |--------|--------|------|
 | **Ergonomics** | 20 관절각도 (degrees) | [1A] 직접 관절 매핑 |
+| **Raw Skeleton (25→21 MANO)** | 25 노드 → 21 MANO keypoint (x,y,z,quat) | [3A] dex_retarget fingertip 최적화 |
 
 ### Manus Ergonomics (20관절)
 
@@ -357,6 +377,14 @@ UDP 수신 + retarget 결과만 출력, ROS2 발행 안 함.
 from sender.hand.gen1a_ergo_direct import ErgoDirectRetarget
 retarget = ErgoDirectRetarget(hand_side="right")
 dg5f_angles = retarget.retarget(ergonomics=manus_angles)  # ndarray[20] → ndarray[20]
+```
+
+**[3A] dex_retarget**: `DexRetargetWrapper`가 Manus 21 MANO keypoint를 DexPilot/Vector
+optimizer로 fingertip 위치 최적화.
+```python
+from sender.hand.gen3a_dex_retarget import DexRetargetWrapper
+retarget = DexRetargetWrapper(hand_side="right")
+dg5f_angles = retarget.retarget(skeleton=hand_data.skeleton)  # ndarray[21,7] → ndarray[20]
 ```
 
 ### DG5F 관절 이름
@@ -480,7 +508,7 @@ python3 -m robot.hand.tests.test_tuning --hand right --test zero
 | 4. Sender 시작 | `python3 -m sender.hand.manus_sender --target-ip <로봇IP>` | (자동 수신) |
 | 5. 동작 확인 | 손을 움직여서 확인 | DG5F 핸드 동작 확인 |
 
-### Mode B: Vector retarget (조종 PC에서 retarget)
+### Mode B: [1A] Ergo-Direct retarget (조종 PC에서 retarget)
 
 | 단계 | 조종 PC | 로봇 PC |
 |------|---------|---------|
@@ -489,6 +517,19 @@ python3 -m robot.hand.tests.test_tuning --hand right --test zero
 | 3. Receiver 시작 | - | `python3 -m robot.hand.receiver --hand right` |
 | 4. Sender 시작 | `python3 -m sender.hand.manus_sender --target-ip <로봇IP> --retarget ergo-direct --sdk-mode ros2 --calibrate` | (자동 수신, retarget 스킵) |
 | 5. 동작 확인 | 시작 3초: 손 펴기 (캘리), 이후 자유 동작 | DG5F 핸드 동작 확인 |
+
+### Mode C: [3A] dex_retarget (skeleton + DexPilot, 조종 PC에서 retarget)
+
+| 단계 | 조종 PC | 로봇 PC |
+|------|---------|---------|
+| 0. 사전 설치 | `pip install dex_retargeting "numpy<2" mediapipe==0.10.21` | - |
+| 1. manus_data_publisher | `ros2 run manus_ros2 manus_data_publisher` | - |
+| 2. 드라이버 시작 | - | `ros2 launch dg5f_driver dg5f_right_pid_all_controller.launch.py delto_ip:=169.254.186.72` |
+| 3. Receiver 시작 | - | `python3 -m robot.hand.receiver --hand right` |
+| 4. Sender 시작 | `python3 -m sender.hand.manus_sender --target-ip <로봇IP> --retarget dex --sdk-mode ros2` | (자동 수신, retarget 스킵) |
+| 5. 동작 확인 | `[ManusROS2] Manus skeleton: 25 raw nodes → MANO 21 (remap OK)` 로그 확인 | DG5F 손가락이 즉시 따라가는지 확인 |
+
+자세한 설치/튜닝/트러블슈팅: [`sender/hand/docs/dex_retarget_setup.md`](../sender/hand/docs/dex_retarget_setup.md)
 
 ---
 
@@ -528,6 +569,18 @@ sudo ufw allow 9872/udp
 → 이더넷 케이블 연결 확인
 → 핸드 IP 확인: `ping 169.254.186.72`
 → 핸드 전원 확인 (부팅 후 10-15초 대기)
+
+### [3A] dex_retarget remap 경고
+
+```
+[ManusROS2] WARNING: Manus skeleton remap incomplete — MANO slots unfilled.
+            Received N nodes with (chain, joint) pairs: [...]
+```
+→ manus_data_publisher가 25 노드를 모두 emit하지 않음 (글러브 일부 손가락 dropout 또는
+   라벨 변경). 출력된 (chain, joint) 키 set과 `gen3a_dex_retarget/manus_remap.py`의
+   `_MANO_REMAP` 표를 비교해서 누락된 키 확인.
+→ 일시적 dropout이면 `[3A]` 모드는 해당 프레임을 skip하고 다음 정상 프레임까지
+   마지막 자세 유지 (warm start) — 에러 폭주 없음.
 
 ### DG5F 모터가 움직이지 않음
 

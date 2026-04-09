@@ -30,6 +30,7 @@ class HandRetargetBase(ABC):
 
         서브클래스마다 kwargs가 다름:
         - 1A: retarget(ergonomics=ndarray[20])
+        - 3A: retarget(skeleton=ndarray[21,7])  # MANO 21-node layout
         """
         ...
 

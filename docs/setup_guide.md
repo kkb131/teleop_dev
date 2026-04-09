@@ -34,11 +34,13 @@ conda activate teleop_operator
 | 패키지 | 용도 |
 |--------|------|
 | openvr | Vive Tracker SteamVR API |
-| numpy | 좌표 변환, 쿼터니언 연산 |
+| numpy (<2.0) | 좌표 변환, 쿼터니언 연산 (dex_retargeting / pinocchio ABI 호환) |
 | pynput | 키보드 상태 읽기 (vive_sender) |
 | pyyaml | YAML 설정 파싱 |
 | pygame | 조이스틱/게임패드 입력 |
 | libusb | Manus SDK 의존 |
+| dex_retargeting | manus_sender `--retarget dex` (DexPilot/Vector) |
+| mediapipe==0.10.21 | dex_retargeting examples 의존 (`mediapipe.framework`) |
 
 ### 1.3 SteamVR 설정 (Vive Tracker 사용 시)
 
@@ -85,6 +87,9 @@ python3 -m sender.hand.manus_sender --target-ip 192.168.0.10 --retarget ergo-dir
 
 # Manus sender ([1A] + 2포즈 캘리브레이션)
 python3 -m sender.hand.manus_sender --target-ip 192.168.0.10 --retarget ergo-direct --sdk-mode ros2 --calibrate
+
+# Manus sender ([3A] dex_retarget — DexPilot fingertip 최적화, manus_data_publisher 필요)
+python3 -m sender.hand.manus_sender --target-ip 192.168.0.10 --retarget dex --sdk-mode ros2
 ```
 
 ### 1.6 PYTHONPATH 설정
@@ -244,12 +249,14 @@ python3 -m robot.arm.admittance.main --mode rtde --input unified --robot-ip 192.
 
 | 패키지 | 출처 | 용도 |
 |--------|------|------|
-| numpy | pip/conda | 좌표 변환, 쿼터니언 |
+| numpy (<2.0) | pip/conda | 좌표 변환 + dex_retargeting/pinocchio ABI 호환 |
 | openvr | pip | Vive Tracker SteamVR API |
 | pynput | pip | 키보드 상태 (vive_sender) |
 | pyyaml | pip | YAML 설정 파싱 |
 | pygame | pip | 조이스틱 입력 |
 | libusb | apt/conda | Manus SDK |
+| dex_retargeting | pip | manus_sender `--retarget dex` (DexPilot/Vector) |
+| mediapipe==0.10.21 | pip | dex_retargeting examples (`mediapipe.framework`) |
 
 ### 로봇 PC (robot/)
 
