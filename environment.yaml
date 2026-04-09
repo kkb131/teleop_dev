@@ -21,9 +21,7 @@ dependencies:
   - pip
   - pip:
     - openvr>=1.26.701      # SteamVR / Vive Tracker (vive_sender)
-    - "numpy<2"             # 좌표변환, 쿼터니언 연산 (pinocchio ABI 호환 위해 <2 필수)
+    - numpy                 # 좌표변환, 쿼터니언 연산
     - pynput>=1.7.6         # 키보드 입력 (vive_sender KeyboardStateTracker)
     - pyyaml>=6.0           # Vive/Manus config 파싱
     - pygame>=2.0.0         # 조이스틱/게임패드 입력 (joystick_sender)
-    - scipy>=1.10.0         # 벡터 retarget 최적화 (manus_sender --retarget vector)
-    - pin>=2.7.0            # pinocchio FK/IK (manus_sender --retarget vector) ※ pip install pinocchio는 다른 패키지!

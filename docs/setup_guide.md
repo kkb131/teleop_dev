@@ -38,8 +38,6 @@ conda activate teleop_operator
 | pynput | 키보드 상태 읽기 (vive_sender) |
 | pyyaml | YAML 설정 파싱 |
 | pygame | 조이스틱/게임패드 입력 |
-| scipy | 벡터 retarget 최적화 (manus_sender --retarget vector) |
-| pin (pinocchio) | DG5F FK — `pip install pin` (NOT `pip install pinocchio`) |
 | libusb | Manus SDK 의존 |
 
 ### 1.3 SteamVR 설정 (Vive Tracker 사용 시)
@@ -82,11 +80,11 @@ python3 -m sender.arm.vive_sender --target-ip 192.168.0.10
 # Manus sender (Mode A: raw — receiver 측에서 retarget)
 python3 -m sender.hand.manus_sender --target-ip 192.168.0.10
 
-# Manus sender (Mode B: vector retarget — sender 측에서 retarget)
-python3 -m sender.hand.manus_sender --target-ip 192.168.0.10 --retarget vector
+# Manus sender ([1A] Ergonomics Direct Mapping — sender 측에서 retarget)
+python3 -m sender.hand.manus_sender --target-ip 192.168.0.10 --retarget ergo-direct --sdk-mode ros2
 
-# Manus sender (Mode B + 캘리브레이션)
-python3 -m sender.hand.manus_sender --target-ip 192.168.0.10 --retarget vector --calibrate
+# Manus sender ([1A] + 2포즈 캘리브레이션)
+python3 -m sender.hand.manus_sender --target-ip 192.168.0.10 --retarget ergo-direct --sdk-mode ros2 --calibrate
 ```
 
 ### 1.6 PYTHONPATH 설정
@@ -251,8 +249,6 @@ python3 -m robot.arm.admittance.main --mode rtde --input unified --robot-ip 192.
 | pynput | pip | 키보드 상태 (vive_sender) |
 | pyyaml | pip | YAML 설정 파싱 |
 | pygame | pip | 조이스틱 입력 |
-| scipy | pip | 벡터 retarget 최적화 (--retarget vector) |
-| pin (pinocchio) | pip (`pip install pin`) | DG5F FK (--retarget vector) |
 | libusb | apt/conda | Manus SDK |
 
 ### 로봇 PC (robot/)

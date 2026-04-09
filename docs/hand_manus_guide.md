@@ -15,7 +15,7 @@ Manus Quantum Metaglove로 손 동작을 캡처하여 Tesollo DG5F 로봇 핸드
 │   ↓                  │                   │   ↓                          │
 │ ManusReader (SDK)    │                   │ ManusReceiver (UDP)          │
 │   ↓                  │   UDP 9872        │   ↓                          │
-│ manus_sender.py  ────┼──────────────────→│ ManusToD5FRetarget + EMA     │
+│ manus_sender.py  ────┼──────────────────→│ Retarget + EMA               │
 │                      │                   │   ↓                          │
 │ [pynput 키보드]      │                   │ DG5FROS2Client (ROS2 topic)  │
 │                      │                   │   ↓ MultiDOFCommand          │
@@ -23,7 +23,7 @@ Manus Quantum Metaglove로 손 동작을 캡처하여 Tesollo DG5F 로봇 핸드
 └──────────────────────┘                   └──────────────────────────────┘
 ```
 
-### Mode B: Vector retarget (retarget은 조종 PC에서)
+### Mode B: [1A] Ergo-Direct retarget (retarget은 조종 PC에서)
 
 ```
 조종 PC (Operator)                          로봇 PC (AGX Orin)
@@ -31,8 +31,8 @@ Manus Quantum Metaglove로 손 동작을 캡처하여 Tesollo DG5F 로봇 핸드
 │ Manus Glove                │             │ dg5f_driver (pid_all_ctrl)   │
 │   ↓                        │             │   ↓                          │
 │ ManusReader (SDK)          │             │ ManusReceiver (UDP)          │
-│   ↓                        │  UDP 9872   │   ↓ (retarget 스킵)         │
-│ VectorRetarget (최적화)    │             │ DG5FROS2Client               │
+│   ↓                        │  UDP 9872   │   ↓ (retarget 스킵)          │
+│ ErgoDirectRetarget [1A]    │             │ DG5FROS2Client               │
 │   ↓ DG5F angles            │             │   ↓ MultiDOFCommand          │
 │ manus_sender.py ───────────┼────────────→│ Tesollo DG5F Hand            │
 │  (retargeted=true)         │             │                              │
@@ -164,17 +164,18 @@ python3 -m sender.hand.manus_sender \
   --hand right
 ```
 
-### Vector retarget 실행 (Mode B: 조종 PC에서 retarget)
+### [1A] Ergo-Direct retarget 실행 (Mode B: 조종 PC에서 retarget)
 
 ```bash
 python3 -m sender.hand.manus_sender \
   --target-ip 192.168.0.10 \
   --hand right \
-  --retarget vector \
+  --retarget ergo-direct \
+  --sdk-mode ros2 \
   --calibrate
 ```
 
-`--calibrate`: 시작 시 3초간 손을 편 상태로 baseline 캘리브레이션.
+`--calibrate`: 시작 시 open hand → fist 2-pose 캘리브레이션.
 
 ### CLI 옵션
 
@@ -186,7 +187,7 @@ python3 -m sender.hand.manus_sender \
 | `--hand` | right | `left`, `right`, 또는 `both` |
 | `--config` | default.yaml | YAML 설정 파일 경로 |
 | `--sdk-path` | (자동) | SDKClient_Linux.out 경로 |
-| `--retarget` | none | `none` (raw) 또는 `vector` (벡터 최적화) |
+| `--retarget` | none | `none` (raw) 또는 `ergo-direct` ([1A] 직접 매핑) |
 | `--calibrate` | false | 시작 시 open-hand baseline 캘리브레이션 |
 | `--urdf` | (자동) | DG5F URDF 경로 (vector 모드용) |
 
@@ -334,8 +335,7 @@ UDP 수신 + retarget 결과만 출력, ROS2 발행 안 함.
 
 | 스트림 | 데이터 | 용도 |
 |--------|--------|------|
-| **Ergonomics** | 20 관절각도 (degrees) | Mode A: 직접 관절 매핑 |
-| **Raw Skeleton** | 21 노드 × (position + quaternion) | Mode B: 벡터 최적화 retarget |
+| **Ergonomics** | 20 관절각도 (degrees) | [1A] 직접 관절 매핑 |
 
 ### Manus Ergonomics (20관절)
 
@@ -350,34 +350,13 @@ UDP 수신 + retarget 결과만 출력, ROS2 발행 안 함.
 
 순서: Thumb(0-3) → Index(4-7) → Middle(8-11) → Ring(12-15) → Pinky(16-19)
 
-### Manus Raw Skeleton (21노드)
-
-```
-[0]     = wrist (hand root)
-[1-4]   = thumb:  CMC, MCP, IP, TIP
-[5-8]   = index:  MCP, PIP, DIP, TIP
-[9-12]  = middle: MCP, PIP, DIP, TIP
-[13-16] = ring:   MCP, PIP, DIP, TIP
-[17-20] = pinky:  MCP, PIP, DIP, TIP
-```
-
-각 노드: `[x, y, z, qw, qx, qy, qz]` (position + quaternion)
-Fingertip indices: `[4, 8, 12, 16, 20]`
-
 ### Tesollo DG5F (20모터)
 
-**Mode A** (raw): `ManusToD5FRetarget`이 Manus 관절각도를 DG5F 모터 각도로 변환.
+**[1A] Ergo-Direct**: `ErgoDirectRetarget`이 Manus 관절각도를 DG5F 모터 각도로 변환.
 ```python
-from robot.hand.retarget import ManusToD5FRetarget
-retarget = ManusToD5FRetarget(hand_side="right")
-dg5f_angles = retarget.retarget(manus_angles)  # ndarray[20] → ndarray[20]
-```
-
-**Mode B** (vector): `VectorRetarget`이 Manus skeleton 3D 위치로부터 DG5F 각도를 최적화.
-```python
-from sender.hand.vector_retarget import VectorRetarget
-rt = VectorRetarget(hand_side="right")
-dg5f_angles = rt.retarget(skeleton)  # ndarray[21,7] → ndarray[20]
+from sender.hand.gen1a_ergo_direct import ErgoDirectRetarget
+retarget = ErgoDirectRetarget(hand_side="right")
+dg5f_angles = retarget.retarget(ergonomics=manus_angles)  # ndarray[20] → ndarray[20]
 ```
 
 ### DG5F 관절 이름
@@ -508,7 +487,7 @@ python3 -m robot.hand.tests.test_tuning --hand right --test zero
 | 1. SDK 빌드 | `cd sender/hand/sdk && ./build.sh` | - |
 | 2. 드라이버 시작 | - | `ros2 launch dg5f_driver dg5f_right_pid_all_controller.launch.py delto_ip:=169.254.186.72` |
 | 3. Receiver 시작 | - | `python3 -m robot.hand.receiver --hand right` |
-| 4. Sender 시작 | `python3 -m sender.hand.manus_sender --target-ip <로봇IP> --retarget vector --calibrate` | (자동 수신, retarget 스킵) |
+| 4. Sender 시작 | `python3 -m sender.hand.manus_sender --target-ip <로봇IP> --retarget ergo-direct --sdk-mode ros2 --calibrate` | (자동 수신, retarget 스킵) |
 | 5. 동작 확인 | 시작 3초: 손 펴기 (캘리), 이후 자유 동작 | DG5F 핸드 동작 확인 |
 
 ---

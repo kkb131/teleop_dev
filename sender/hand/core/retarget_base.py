@@ -1,7 +1,6 @@
 """세대 공통 리타게팅 베이스 클래스.
 
-1A, 1B, 2A 등 모든 세대의 retarget 클래스가 이 ABC를 상속.
-기존 RetargetBase(skeleton 전용)와 달리, 입력 타입이 자유로움.
+모든 retarget 클래스가 이 ABC를 상속. 입력 타입은 서브클래스에서 자유롭게 정의.
 """
 
 from abc import ABC, abstractmethod
@@ -31,9 +30,6 @@ class HandRetargetBase(ABC):
 
         서브클래스마다 kwargs가 다름:
         - 1A: retarget(ergonomics=ndarray[20])
-        - 1B: retarget(skeleton=ndarray[25,7])
-        - 2A: retarget(skeleton=ndarray[25,7], ergonomics=ndarray[20])
-        - 1C: retarget(landmarks=ndarray[21,3])
         """
         ...
 

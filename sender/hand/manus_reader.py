@@ -2,13 +2,8 @@
 """Manus Quantum Metagloves reader — subprocess wrapper.
 
 Launches the SDKClient_Linux C++ binary with --stream-json flag
-and reads newline-delimited JSON from its stdout. Provides both
-ergonomics (joint angles) and raw skeleton (3D keypoints) data.
-
-HandData fields:
-    joint_angles: ndarray[20] — ergonomics joint angles (radians)
-    skeleton: ndarray[N, 7] or None — raw skeleton nodes [x,y,z,qw,qx,qy,qz]
-    has_skeleton: bool — True if SDK provides skeleton data
+and reads newline-delimited JSON from its stdout. Provides ergonomics
+joint angles via the HandData dataclass.
 
 Usage:
     python3 -m sender.hand.manus_reader [--hand right] [--sdk-bin sender/hand/sdk/SDKClient_Linux/SDKClient_Linux.out]
@@ -67,8 +62,6 @@ class HandData:
     wrist_quat: np.ndarray = field(default_factory=lambda: np.array([1.0, 0, 0, 0]))
     hand_side: str = "right"
     timestamp: float = 0.0
-    skeleton: Optional[np.ndarray] = None  # (N, 7) per node: [x,y,z, qw,qx,qy,qz]
-    has_skeleton: bool = False
 
 
 class ManusReader:
@@ -283,16 +276,6 @@ class ManusReader:
                     np.array(spread_deg[:NUM_FINGERS], dtype=np.float32)
                 ) if len(spread_deg) >= NUM_FINGERS else np.zeros(NUM_FINGERS)
 
-                # Parse skeleton if available
-                skel_raw = pkt.get("skeleton")
-                skel_arr = None
-                has_skel = pkt.get("has_skeleton", False)
-                if skel_raw and isinstance(skel_raw, list):
-                    try:
-                        skel_arr = np.array(skel_raw, dtype=np.float32)  # (N, 7)
-                    except (ValueError, TypeError):
-                        skel_arr = None
-
                 hd = HandData(
                     joint_angles=joint_angles,
                     finger_spread=finger_spread,
@@ -302,8 +285,6 @@ class ManusReader:
                                         dtype=np.float32),
                     hand_side=hand_side,
                     timestamp=timestamp,
-                    skeleton=skel_arr,
-                    has_skeleton=has_skel,
                 )
 
                 with self._lock:

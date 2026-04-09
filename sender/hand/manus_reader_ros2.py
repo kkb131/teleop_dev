@@ -203,46 +203,13 @@ class ManusReaderROS2:
                 joint_angles[12], joint_angles[16]
             ], dtype=np.float32)
 
-            # Raw skeleton → ndarray[N, 7] (x, y, z, qw, qx, qy, qz)
-            # IMPORTANT: Use node_id as index, NOT insertion order
-            # Manus may send nodes in arbitrary order
-            skeleton = None
-            has_skeleton = False
-            if msg.raw_nodes and len(msg.raw_nodes) > 0:
-                max_id = max(node.node_id for node in msg.raw_nodes)
-                skel_arr = np.zeros((max_id + 1, 7), dtype=np.float32)
-                for node in msg.raw_nodes:
-                    p = node.pose.position
-                    q = node.pose.orientation
-                    skel_arr[node.node_id] = [p.x, p.y, p.z, q.w, q.x, q.y, q.z]
-                skeleton = skel_arr
-                has_skeleton = True
-
-                # Log skeleton info once
-                if self._line_count == 0:
-                    print(f"[ManusROS2] Skeleton: {len(msg.raw_nodes)} nodes, "
-                          f"max_id={max_id}, array shape={skeleton.shape}")
-                    # Print node_id → joint_type mapping for first 5 nodes
-                    for node in sorted(msg.raw_nodes, key=lambda n: n.node_id)[:10]:
-                        print(f"  node[{node.node_id:2d}]: joint={node.joint_type}, "
-                              f"chain={node.chain_type}")
-
-            # Wrist from first skeleton node (if available)
-            wrist_pos = np.zeros(3, dtype=np.float32)
-            wrist_quat = np.array([1.0, 0, 0, 0], dtype=np.float32)
-            if skeleton is not None and len(skeleton) > 0:
-                wrist_pos = skeleton[0, :3].copy()
-                wrist_quat = skeleton[0, 3:].copy()
-
             hd = HandData(
                 joint_angles=joint_angles,
                 finger_spread=finger_spread,
-                wrist_pos=wrist_pos,
-                wrist_quat=wrist_quat,
+                wrist_pos=np.zeros(3, dtype=np.float32),
+                wrist_quat=np.array([1.0, 0, 0, 0], dtype=np.float32),
                 hand_side=hand_side,
                 timestamp=time.time(),
-                skeleton=skeleton,
-                has_skeleton=has_skeleton,
             )
 
             with self._lock:
@@ -302,8 +269,6 @@ def main():
                     if count > 0:
                         print(f"\033[{num_lines}A", end="")
                     print(_print_hand_data(data))
-                    skel_str = f"skeleton={data.skeleton.shape}" if data.has_skeleton else "no skeleton"
-                    print(f"  [{skel_str}]")
                     count += 1
 
                 if args.duration > 0 and time.time() - start_time >= args.duration:

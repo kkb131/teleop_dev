@@ -49,8 +49,7 @@ src/teleop_dev/
 | **입력 혼재** | `sender/hand/retarget/`의 base.py는 skeleton(N,7)을 기대하는데, 1A는 ergonomics(20 float)만 사용 |
 | **리타게팅 위치 분산** | sender에 vector_retarget/direct_mapping, robot에 ManusToD5FRetarget → 같은 역할이 두 곳에 |
 | **base 인터페이스 부적합** | RetargetBase.retarget(skeleton)은 skeleton 전용 → ergonomics, MediaPipe 등 다른 입력 지원 불가 |
-| **확장성 부족** | [1B], [2A], [3A] 등 다른 세대 방법론을 깔끔하게 추가할 구조가 아님 |
-| **DG5F FK 중복** | sender/hand/retarget/dg5f_fk.py와 retarget_dev/models/fingertip_ik/dg5f_fk.py 중복 |
+| **확장성 부족** | [1B], [3A] 등 다른 세대 방법론을 깔끔하게 추가할 구조가 아님 |
 
 ### 1.3 계획하는 새 구조
 
@@ -118,10 +117,10 @@ src/teleop_dev/
 |------|------|
 | `sender/hand/retarget/__init__.py` | 기존 factory → 새 구조로 대체 |
 | `sender/hand/retarget/base.py` | skeleton 전용 ABC → 새 retarget_base.py로 대체 |
-| `sender/hand/retarget/angle_extractor.py` | 3D→angle 추출기. 1A는 ergonomics 직접 사용이므로 불필요 (1C/2A에서 재구현 예정) |
+| `sender/hand/retarget/angle_extractor.py` | 3D→angle 추출기. 1A는 ergonomics 직접 사용이므로 불필요 (1C에서 재구현 예정) |
 | `sender/hand/retarget/direct_mapping.py` | 기존 1.5세대. 새 gen1a로 대체 |
-| `sender/hand/retarget/vector_retarget.py` | 기존 2.5세대. 추후 gen2a/gen3a로 재구현 예정 |
-| `sender/hand/retarget/dg5f_fk.py` | 추후 core/에 통합 (2A 이후 필요 시) |
+| `sender/hand/retarget/vector_retarget.py` | 기존 2.5세대. 추후 gen3a로 재구현 예정 |
+| `sender/hand/retarget/dg5f_fk.py` | 추후 core/에 통합 (3A 이후 필요 시) |
 | `sender/hand/retarget/config/` | 기존 calibration yaml |
 | `sender/hand/dg5f_fk.py` | DEPRECATED redirect |
 | `sender/hand/vector_retarget.py` | DEPRECATED redirect |
@@ -150,7 +149,7 @@ src/teleop_dev/
 
 ```
 src/teleop_dev/sender/hand/
-├── core/                          # 세대 공통 인프라 (1A, 1B, 2A 등 모두 사용)
+├── core/                          # 세대 공통 인프라 (1A, 1B 등 모두 사용)
 │   ├── __init__.py
 │   ├── retarget_base.py           # 새 ABC
 │   ├── dg5f_config.py             # DG5F 관절 정보 (limits, names, link lengths)
@@ -163,7 +162,6 @@ src/teleop_dev/sender/hand/
 ├── (향후 추가 예정)
 │   gen1b_skeleton_quat/           # [1B] Manus Skeleton → Quat Decomposition
 │   gen1c_mediapipe_angles/        # [1C] MediaPipe → Vector Angles
-│   gen2a_fingertip_ik/            # [2A] Manus Skeleton → Fingertip IK
 │   gen3a_multi_cost/              # [3A] Multi-Cost Optimization
 │   ...
 ```
@@ -188,8 +186,7 @@ src/teleop_dev/robot/hand/
 ```python
 """세대 공통 리타게팅 베이스 클래스.
 
-1A, 1B, 2A 등 모든 세대의 retarget 클래스가 이 ABC를 상속.
-기존 RetargetBase(skeleton 전용)와 달리, 입력 타입이 자유로움.
+모든 retarget 클래스가 이 ABC를 상속. 입력 타입은 서브클래스에서 자유롭게 정의.
 """
 
 from abc import ABC, abstractmethod
@@ -220,7 +217,6 @@ class HandRetargetBase(ABC):
         서브클래스마다 kwargs가 다름:
         - 1A: retarget(ergonomics=ndarray[20])
         - 1B: retarget(skeleton=ndarray[25,7])
-        - 2A: retarget(skeleton=ndarray[25,7], ergonomics=ndarray[20])
         - 1C: retarget(landmarks=ndarray[21,3])
         """
         ...
@@ -773,11 +769,10 @@ print(np.degrees(r.retarget(ergonomics=mock)))
 |------|------|----------|-----------|
 | `gen1b_skeleton_quat/` | [1B] Skeleton Quat | 1A 검증 후 | retarget_base.py, dg5f_config.py, filters.py |
 | `gen1c_mediapipe_angles/` | [1C] MediaPipe | 1A 병렬 | retarget_base.py, dg5f_config.py, filters.py |
-| `gen2a_fingertip_ik/` | [2A] Fingertip IK | Phase 2 | 위 + dg5f_fk.py (core/에 추가) |
 | `gen3a_multi_cost/` | [3A] Multi-Cost Opt | Phase 3 | 위 + cost_functions.py, optimizer.py (core/에 추가) |
 
 core/에 추가될 예정 파일:
-- `core/dg5f_fk.py` — Pinocchio FK (2A부터 필요)
+- `core/dg5f_fk.py` — Pinocchio FK (3A부터 필요)
 - `core/cost_functions.py` — 다중 cost (3A)
 - `core/optimizer.py` — scipy wrapper (3A)
 
