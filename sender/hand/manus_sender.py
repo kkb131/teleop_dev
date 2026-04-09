@@ -23,6 +23,10 @@ Usage:
     # [3A] dex_retargeting (skeleton-based, DexPilot fingertip optimization)
     python3 -m sender.hand.manus_sender --target-ip <ROBOT_IP> --hand right \
         --retarget dex --sdk-mode ros2
+
+    # [3A] dex_retargeting with the multi-task vector optimizer
+    python3 -m sender.hand.manus_sender --target-ip <ROBOT_IP> --hand right \
+        --retarget dex --dex-optimizer vector --sdk-mode ros2
 """
 
 import argparse
@@ -174,6 +178,9 @@ def main():
     parser.add_argument("--retarget", default="none",
                         choices=["none", "ergo-direct", "dex"],
                         help="Retarget mode: none=raw, ergo-direct=[1A], dex=[3A] dex_retargeting")
+    parser.add_argument("--dex-optimizer", default="dexpilot",
+                        choices=["dexpilot", "vector"],
+                        help="[3A] dex optimizer: dexpilot (default, thumb-pinch focused) or vector (multi-task)")
     parser.add_argument("--calibrate", action="store_true",
                         help="2-pose calibration at startup (open hand + fist)")
     args = parser.parse_args()
@@ -262,8 +269,10 @@ def main():
         from sender.hand.gen3a_dex_retarget import DexRetargetWrapper
         retarget = DexRetargetWrapper(
             hand_side=hand_side if hand_side != "both" else "right",
+            optimizer=args.dex_optimizer,
         )
-        print(f"[Sender] Retarget: 3A-dex-retarget ({hand_side})")
+        print(f"[Sender] Retarget: 3A-dex-retarget ({hand_side}, "
+              f"optimizer={args.dex_optimizer})")
 
     # Start keyboard listener
     kb = KeyboardState()

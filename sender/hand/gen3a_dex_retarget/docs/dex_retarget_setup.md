@@ -25,6 +25,14 @@ pip install "numpy<2"             # 필수: pinocchio / eigenpy ABI 호환
 pip install mediapipe==0.10.21    # 필수: dex_retargeting examples 의존
 ```
 
+> **참고: `git clone` 불필요.** retarget_dev의 setup.md는 dex-retargeting
+> GitHub 레포 + git submodule을 요구하지만, 그건 라이브러리 내장 URDF
+> (Allegro/Shadow/LEAP)를 쓰는 경우입니다. **이 모듈은 DG5F URDF
+> (`gen3a_dex_retarget/config/dg5f_right_retarget.urdf`)를 자체 보관**하고
+> `DexRetargetWrapper.__init__`이 `RetargetingConfig.set_default_urdf_dir()`로
+> 그 디렉터리를 지정하므로, dex_retargeting 패키지의 `assets/robots/hands/`는
+> 사용하지 않습니다. `pip install dex_retargeting` 한 줄이면 충분.
+
 ### 버전 제약 (중요)
 
 | 패키지 | 제약 | 이유 |

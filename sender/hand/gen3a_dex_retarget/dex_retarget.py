@@ -37,20 +37,31 @@ class DexRetargetWrapper(HandRetargetBase):
     ----------
     hand_side : str
         "left" or "right" (only "right" config currently provided).
+    optimizer : str
+        Built-in config selector: ``"dexpilot"`` (default, fast +
+        thumb-pinch focused) or ``"vector"`` (multi-task palm→tip and
+        MCP→DIP). Ignored when ``config_path`` is given.
     config_path : str or None
-        Path to YAML config. If None, defaults to
-        ``gen3a_dex_retarget/config/dg5f_{hand_side}_dexpilot.yml``.
+        Path to a custom YAML config. Overrides ``optimizer`` if set.
+        Defaults to ``gen3a_dex_retarget/config/dg5f_{hand_side}_{optimizer}.yml``.
         The YAML's ``urdf_path`` is resolved relative to the YAML file
         itself, so configs can ship with relative paths.
     """
 
-    def __init__(self, hand_side: str = "right", config_path: Optional[str] = None):
+    def __init__(self, hand_side: str = "right",
+                 optimizer: str = "dexpilot",
+                 config_path: Optional[str] = None):
         super().__init__(hand_side)
 
-        # Default to dexpilot config in this package
+        if optimizer not in ("dexpilot", "vector"):
+            raise ValueError(
+                f"optimizer must be 'dexpilot' or 'vector', got '{optimizer}'"
+            )
+
+        # Default to packaged YAML for the requested optimizer
         here = Path(__file__).parent
         if config_path is None:
-            config_path = here / "config" / f"dg5f_{hand_side}_dexpilot.yml"
+            config_path = here / "config" / f"dg5f_{hand_side}_{optimizer}.yml"
         config_path = Path(config_path).resolve()
         if not config_path.exists():
             raise FileNotFoundError(f"DexRetarget config not found: {config_path}")
