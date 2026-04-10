@@ -14,8 +14,8 @@ Output: np.ndarray shape (21, 3), float32, meters, wrist = [0, 0, 0],
 
 import numpy as np
 
+from sender.hand.core.mano_transform import apply_mano_transform
 from sender.hand.realsense.hand_detector import HandDetection
-from sender.hand.realsense.mano_transform import apply_mano_transform
 from sender.hand.realsense.constants import DEPTH_MAX_M, DEPTH_MIN_M, DEPTH_SEARCH_RADIUS
 
 
@@ -96,9 +96,14 @@ class DepthKeypointConverter:
         # Shift to wrist origin
         pts_3d -= pts_3d[self.WRIST_INDEX]
 
-        # Apply MANO transform (required by dex-retargeting)
+        # Apply MANO transform (required by dex-retargeting).
+        # MediaPipe convention — RealSense uses MediaPipe HandLandmarker for
+        # 2D detection, so the input chirality matches phone (and matches
+        # dex-retargeting upstream's single_hand_detector.py exactly).
         if self._apply_mano:
-            pts_3d = apply_mano_transform(pts_3d, hand_type=self._hand_type)
+            pts_3d = apply_mano_transform(
+                pts_3d, hand_type=self._hand_type, convention="mediapipe",
+            )
 
         return pts_3d.astype(np.float32)
 

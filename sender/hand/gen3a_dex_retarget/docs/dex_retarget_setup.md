@@ -9,11 +9,18 @@ manus_data_publisher (ROS2 120Hz)
   → /manus_glove_*  ManusGlove msg
     → ManusReaderROS2 (callback)
       → 25 → 21 MANO 리매핑 (chain_type, joint_type 메타데이터)
-        → HandData.skeleton (21, 7)
-          → DexRetargetWrapper.retarget()
-            → DG5F angles (20,)
-              → manus_sender → UDP → robot/hand/receiver → DG5F
+        → HandData.skeleton (21, 7)  ← VUH world frame, 아직 MANO 회전 안 됨
+          → DexRetargetWrapper.retarget(skeleton=...)
+              ├ wrist origin shift
+              ├ apply_mano_transform(convention="manus")  ← ★ 이 모듈의 책임
+              └ optimize → DG5F angles (20,)
+                → manus_sender → UDP → robot/hand/receiver → DG5F
 ```
+
+RealSense path (다른 sensing source) 의 경우 `DepthKeypointConverter` 가 sensor
+모듈에서 미리 `apply_mano_transform(convention="mediapipe")` 를 호출하므로,
+`realsense_sender.py` 는 `DexRetargetWrapper(... )` (default `mano_convention=None`)
+로 wrapper 를 만들어 retarget() 가 회전을 또 적용하지 않도록 한다.
 
 ## 1. 사전 설치 (조종 PC)
 
@@ -95,6 +102,39 @@ python3 -m sender.hand.manus_sender \
 [Sender] Retarget: 3A-dex-retarget (right)
 [ManusROS2] Manus skeleton: 25 raw nodes → MANO 21 (remap OK)
 ```
+
+## 3.5 MANO frame 회전 — sensing source 별 매트릭스 분리 ★
+
+각 sensing source 가 출력하는 좌표계의 chirality 가 다르기 때문에, 같은 canonical
+MANO frame 으로 보내려면 source 별로 다른 operator → MANO 회전 매트릭스를 사용해야
+한다. 이 모듈은 `mano_convention` 파라미터로 선택한다 (구현은
+[`sender/hand/core/mano_transform.py`](../../core/mano_transform.py)).
+
+| convention | 사용 source | 설명 |
+|---|---|---|
+| `"manus"` | Manus 글러브 (raw 25→21 remapped skeleton) | SDK 가 VUH world space 로 publish → row 1 = `[1, 0, 0]` 매트릭스 |
+| `"mediapipe"` | RealSense, phone (MediaPipe HandLandmarker) | dex-retargeting upstream 매트릭스 (row 1 = `[-1, 0, 0]`) |
+| `None` | (default) | 입력이 이미 MANO frame — wrapper 가 회전 적용 안 함 |
+
+**RealSense 경로**: `DepthKeypointConverter.convert()` 가 sensor module 안에서 미리
+`apply_mano_transform(convention="mediapipe")` 를 호출하므로,
+[`realsense_sender.py`](../../realsense_sender.py) 는 `DexRetargetWrapper(...)` 에서
+`mano_convention=None` (default) 으로 만든다 → wrapper 안에서는 wrist shift 만 일어남
+(idempotent).
+
+**Manus 경로**: ManusReaderROS2 의 callback 은 25→21 remap 만 하고 회전은 안 함
+(skeleton 은 raw VUH world frame). 따라서 [`manus_sender.py`](../../manus_sender.py)
+는 `DexRetargetWrapper(..., mano_convention="manus")` 로 만들어, wrapper 가 wrist
+shift + Manus 매트릭스 회전을 둘 다 수행하도록 한다.
+
+이 분리는 phone path 에서 발견된 회귀 (row 1 sign 단일 매트릭스로는 phone 과 manus
+중 한 쪽이 반드시 깨짐) 를 해결한 패턴이다. 자세한 분석은
+[`retarget_dev/.../manus_debug.md §4.4`](../../../../../retarget_dev/models/dex_retarget/docs/manus_debug.md)
+참조.
+
+두 매트릭스의 관계: `MANUS = diag(1, -1, 1) @ MEDIAPIPE` — row 1 sign flip.
+같은 input 에 대한 출력 좌표는 MANO +x 축이 반대 방향 (`mediapipe.x = -manus.x`,
+y/z 동일).
 
 ## 4. 25 → 21 MANO 리매핑 (배경)
 

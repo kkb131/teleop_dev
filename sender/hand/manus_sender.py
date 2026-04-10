@@ -182,12 +182,19 @@ def main():
             return
         import numpy as np
         from sender.hand.gen3a_dex_retarget import DexRetargetWrapper
+        # mano_convention="manus" rotates the raw 25→21-remapped Manus
+        # skeleton (which lives in the SDK's VUH world frame) into the MANO
+        # frame the optimizer expects. RealSense takes a different code path
+        # (mano_convention=None) because DepthKeypointConverter pre-applies
+        # the transform with the "mediapipe" convention. See
+        # sender/hand/core/mano_transform.py for the rationale.
         retarget = DexRetargetWrapper(
             hand_side=hand_side if hand_side != "both" else "right",
             optimizer=args.dex_optimizer,
+            mano_convention="manus",
         )
         print(f"[Sender] Retarget: 3A-dex-retarget ({hand_side}, "
-              f"optimizer={args.dex_optimizer})")
+              f"optimizer={args.dex_optimizer}, mano_convention=manus)")
 
     # Start keyboard listener
     kb = KeyboardState()
