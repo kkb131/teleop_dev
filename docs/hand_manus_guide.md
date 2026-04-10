@@ -103,12 +103,33 @@ Manus Quantum Metaglove로 손 동작을 캡처하여 Tesollo DG5F 로봇 핸드
 
 ## 2. Manus SDK 설치 및 빌드
 
+Manus 글러브 사용 시 **두 가지 빌드 산출물**이 필요합니다 (모드별로 다름):
+
+| 산출물 | 빌드 방법 | 사용처 |
+|---|---|---|
+| `SDKClient_Linux.out` (C++ subprocess) | §2.2 — `./build.sh` | `manus_sender --sdk-mode subprocess` (Mode A/B legacy) |
+| `manus_data_publisher` (ROS2 노드) | §2.5 — `colcon build` | `manus_sender --sdk-mode ros2` (권장, Mode B/C), retarget_dev 의 `--sensing manus-ros2` |
+
+대부분의 경우 ROS2 publisher (§2.5) 만 빌드하면 됩니다 — Mode A 의 raw 전송도 ROS2 모드를 지원합니다. C++ subprocess 빌드는 legacy fallback 입니다.
+
 ### 2.1 SDK 다운로드
 
 Manus SDK Linux 버전을 [공식 문서](https://docs.manus-meta.com/3.1.0/Plugins/SDK/Linux/)에서 다운로드.
-`sender/hand/sdk/SDKClient_Linux/` 디렉토리에 배치.
 
-### 2.2 SDK 빌드
+다운로드한 `.so` 파일은 git 에 포함되지 않으므로 (250MB+) 두 위치에 배치해야 합니다:
+
+| 위치 | 용도 |
+|---|---|
+| `sender/hand/sdk/SDKClient_Linux/ManusSDK/lib/` | C++ subprocess (§2.2) 용 |
+| `sender/hand/sdk/ROS2/ManusSDK/lib/` | ROS2 publisher (§2.5) 용 |
+
+각 디렉터리에 다음 두 파일 중 사용할 mode 에 맞는 것 (혹은 둘 다) 배치:
+- `libManusSDK.so` (138MB, Remote mode)
+- `libManusSDK_Integrated.so` (112MB, Integrated mode)
+
+자세한 안내는 [`sender/hand/sdk/README.md`](../sender/hand/sdk/README.md) 참조.
+
+### 2.2 SDK 빌드 (C++ subprocess, legacy)
 
 ```bash
 cd teleop_dev/sender/hand/sdk
@@ -116,6 +137,8 @@ cd teleop_dev/sender/hand/sdk
 ```
 
 빌드 성공 시 `SDKClient_Linux/SDKClient_Linux.out` 생성.
+
+> ⚠️ legacy 경로입니다. 신규 사용자는 §2.5 의 ROS2 publisher 빌드를 권장합니다 — Mode A/B/C 모두에서 더 안정적이고 retarget_dev 와도 직접 연동됩니다.
 
 ### 2.3 SDK 모드 선택
 
@@ -135,6 +158,82 @@ ls /dev/hidraw*
 ```
 
 동글이 감지되지 않으면 USB 연결 확인.
+
+### 2.5 `manus_ros2` ROS2 패키지 빌드 (권장)
+
+`manus_data_publisher` 노드가 글러브 데이터를 ROS2 토픽 (`/manus_glove_0..3`) 으로 publish 합니다. `manus_sender --sdk-mode ros2` 와 retarget_dev 의 `--sensing manus-ros2` 둘 다 이 노드에 의존.
+
+#### 1. 사전 요건
+
+- ROS2 Humble (`source /opt/ros/humble/setup.bash`)
+- `colcon` (`sudo apt install python3-colcon-common-extensions`)
+- 시스템 라이브러리 (Integrated mode):
+  ```bash
+  sudo apt install -y build-essential libusb-1.0-0-dev libudev-dev libncurses5-dev pkg-config
+  ```
+- ManusSDK `.so` 파일이 `sender/hand/sdk/ROS2/ManusSDK/lib/` 에 배치되어 있어야 함 — §2.1 참조
+
+#### 2. ROS2 워크스페이스에 두 패키지 등록
+
+manus_ros2 / manus_ros2_msgs 소스는 teleop_dev 안에 있습니다:
+```
+sender/hand/sdk/ROS2/
+├── manus_ros2/         # publisher 노드 패키지 (CMakeLists.txt, src/)
+├── manus_ros2_msgs/    # ManusGlove, ManusRawNode, ManusErgonomics 메시지 정의
+└── ManusSDK/           # SDK header + lib/ (라이브러리는 별도 다운로드)
+```
+
+별도 colcon 워크스페이스 (예: `~/manus_ws`) 에서 빌드:
+```bash
+mkdir -p ~/manus_ws/src
+cd ~/manus_ws/src
+
+# 심볼릭 링크로 reference (소스 중복 회피)
+ln -s /path/to/teleop_dev/sender/hand/sdk/ROS2/manus_ros2 .
+ln -s /path/to/teleop_dev/sender/hand/sdk/ROS2/manus_ros2_msgs .
+```
+
+(또는 tamp_ws 와 같은 기존 워크스페이스의 `src/` 에 직접 colcon 빌드해도 됨.)
+
+#### 3. Integrated mode 사용 시 CMakeLists 수정
+
+[`sender/hand/sdk/ROS2/manus_ros2/CMakeLists.txt:27-28`](../sender/hand/sdk/ROS2/manus_ros2/CMakeLists.txt) 의 link target 이 기본적으로 Remote mode 의 `ManusSDK` 입니다. Integrated mode 를 쓰려면 한 줄 수정:
+
+```cmake
+# Before
+target_link_libraries(manus_data_publisher ManusSDK ncurses)
+# After
+target_link_libraries(manus_data_publisher ManusSDK_Integrated ncurses)
+```
+
+#### 4. 빌드
+
+```bash
+cd ~/manus_ws
+source /opt/ros/humble/setup.bash
+colcon build --packages-select manus_ros2_msgs manus_ros2 --symlink-install
+```
+
+`manus_ros2_msgs` 가 먼저 빌드되어야 `manus_ros2` 가 메시지 헤더를 찾을 수 있어서 위 순서를 유지하세요. `--symlink-install` 은 소스 수정 시 재빌드 부담을 줄여줍니다.
+
+#### 5. 소싱 + 실행
+
+```bash
+source ~/manus_ws/install/setup.bash
+ros2 run manus_ros2 manus_data_publisher
+# → /manus_glove_0 ~ /manus_glove_3 토픽으로 ManusGlove 메시지 publish
+```
+
+#### 6. 검증
+
+```bash
+ros2 pkg executables manus_ros2          # → manus_ros2 manus_data_publisher
+ros2 interface show manus_ros2_msgs/msg/ManusGlove
+ros2 topic list | grep manus_glove        # publisher 실행 후 토픽 보임
+ros2 topic echo /manus_glove_0 --once     # raw_node_count: 25 가 보여야 정상
+```
+
+> **참고**: Manus SDK 의 raw skeleton 은 손당 25 노드를 publish 합니다 (1 wrist + thumb 4 + 4 fingers × 5). MANO 표준 21노드와 다르므로 retarget_dev 에서는 [`sensing/manus/ros2_provider.py`](../../retarget_dev/sensing/manus/ros2_provider.py) 의 `_remap_to_mano_21()` 헬퍼가 자동으로 처리합니다. 자세한 내용은 [`retarget_dev/models/dex_retarget/docs/manus_realtime.md`](../../retarget_dev/models/dex_retarget/docs/manus_realtime.md) §5 참조.
 
 ---
 

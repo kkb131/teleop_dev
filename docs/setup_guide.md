@@ -60,12 +60,14 @@ steam steam://run/250820
 
 ### 1.4 Manus SDK 빌드 (Manus 글러브 사용 시)
 
-```bash
-cd teleop_dev/sender/hand/sdk
-./build.sh
-# SDKClient_Linux.out 생성 확인
-ls SDKClient_Linux/SDKClient_Linux.out
-```
+Manus 글러브 사용 시 두 가지 빌드 산출물이 필요합니다:
+
+| 산출물 | 빌드 방법 | 사용처 |
+|---|---|---|
+| `SDKClient_Linux.out` (C++ subprocess) | `cd sender/hand/sdk && ./build.sh` | `manus_sender --sdk-mode subprocess` (legacy) |
+| `manus_data_publisher` (ROS2 노드) | colcon 빌드 (별도 단계 필요) | `manus_sender --sdk-mode ros2` (권장), retarget_dev 의 `--sensing manus-ros2` |
+
+자세한 빌드 절차 (`.so` 라이브러리 다운로드, Integrated vs Remote mode, colcon 워크스페이스 구성, CMakeLists 수정 등) 는 **[`hand_manus_guide.md` §2](hand_manus_guide.md#2-manus-sdk-설치-및-빌드)** 참조.
 
 ### 1.5 실행 테스트
 
