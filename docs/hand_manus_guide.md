@@ -531,6 +531,22 @@ python3 -m robot.hand.tests.test_tuning --hand right --test zero
 
 자세한 설치/튜닝/트러블슈팅: [`sender/hand/docs/dex_retarget_setup.md`](../sender/hand/docs/dex_retarget_setup.md)
 
+### Mode D: realsense_sender ([3A] dex_retarget — Manus 글러브 미보유 환경)
+
+Manus 글러브 없이 Intel RealSense D405 + MediaPipe로 동일한 [3A] 파이프라인
+사용. config 파일과 DexRetargetWrapper를 그대로 공유.
+
+| 단계 | 조종 PC | 로봇 PC |
+|------|---------|---------|
+| 0. 사전 설치 | `pip install pyrealsense2 mediapipe==0.10.21 opencv-python dex_retargeting "numpy<2"` | - |
+| 1. D405 검출 | `rs-enumerate-devices \| grep D405` | - |
+| 2. 드라이버 시작 | - | `ros2 launch dg5f_driver dg5f_right_pid_all_controller.launch.py delto_ip:=169.254.186.72` |
+| 3. Receiver 시작 | - | `python3 -m robot.hand.receiver --hand right` |
+| 4. Sender 시작 | `python3 -m sender.hand.realsense_sender --target-ip <로봇IP> --hand right` | (자동 수신, retarget 스킵) |
+| 5. 동작 확인 | `[Sender] Retarget: 3A-dex-retarget` + DG5F 즉시 반응 | DG5F 손가락이 카메라 손을 따라감 |
+
+자세한 가이드: [`sender/hand/docs/realsense_sender_usage.md`](../sender/hand/docs/realsense_sender_usage.md)
+
 ---
 
 ## 13. 트러블슈팅

@@ -102,25 +102,43 @@ class DexRetargetWrapper(HandRetargetBase):
             len(self._retargeting.joint_names),
         )
 
-    def retarget(self, skeleton: Optional[np.ndarray] = None, **kwargs) -> np.ndarray:
-        """Manus skeleton (21, 7) → DG5F joint angles (20,).
+    def retarget(self,
+                 skeleton: Optional[np.ndarray] = None,
+                 keypoints: Optional[np.ndarray] = None,
+                 **kwargs) -> np.ndarray:
+        """Manus skeleton (21, 7) OR raw keypoints (21, 3) → DG5F angles (20,).
 
         Parameters
         ----------
         skeleton : ndarray[21, 7] or None
-            MANO 21-node array [x, y, z, qw, qx, qy, qz]. If None or wrong
-            shape, returns the previous solution (warm-start hold).
+            MANO 21-node array [x, y, z, qw, qx, qy, qz] from Manus ROS2 reader.
+            Quaternion columns are ignored.
+        keypoints : ndarray[21, 3] or None
+            Raw 3D keypoints (already wrist-centered + MANO frame) from
+            non-Manus sources such as RealSense.
+
+        Pass exactly one of `skeleton` or `keypoints`. If both/neither given,
+        returns zeros.
 
         Returns
         -------
         ndarray[20] DG5F joint angles in radians (clamped by underlying
         SeqRetargeting to URDF joint limits).
         """
-        if skeleton is None or skeleton.shape[0] < 21:
+        if keypoints is not None:
+            kp = np.asarray(keypoints, dtype=np.float32)
+            if kp.ndim < 2 or kp.shape[0] < 21:
+                return np.zeros(NUM_JOINTS, dtype=np.float32)
+            kp = kp[:21, :3]
+        elif skeleton is not None:
+            if skeleton.shape[0] < 21:
+                return np.zeros(NUM_JOINTS, dtype=np.float32)
+            kp = skeleton[:21, :3].astype(np.float32)
+        else:
             return np.zeros(NUM_JOINTS, dtype=np.float32)
 
-        # Extract xyz, shift to wrist origin (matches retarget_dev ManusSensing)
-        kp = skeleton[:21, :3].astype(np.float32)
+        # Wrist origin shift (idempotent — safe even if input is already
+        # wrist-relative, e.g. from RealSense DepthKeypointConverter)
         kp = kp - kp[self._wrist_idx]
 
         ref_value = self._build_ref_value(kp)

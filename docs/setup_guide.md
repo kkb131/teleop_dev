@@ -39,8 +39,10 @@ conda activate teleop_operator
 | pyyaml | YAML 설정 파싱 |
 | pygame | 조이스틱/게임패드 입력 |
 | libusb | Manus SDK 의존 |
-| dex_retargeting | manus_sender `--retarget dex` (DexPilot/Vector) |
-| mediapipe==0.10.21 | dex_retargeting examples 의존 (`mediapipe.framework`) |
+| dex_retargeting | `manus_sender --retarget dex` 및 `realsense_sender` (DexPilot/Vector) |
+| mediapipe==0.10.21 | MediaPipe HandLandmarker (realsense_sender) |
+| pyrealsense2 | Intel RealSense D405 (realsense_sender) |
+| opencv-python | 시각화 + BGR↔RGB (realsense_sender) |
 
 ### 1.3 SteamVR 설정 (Vive Tracker 사용 시)
 
@@ -90,6 +92,9 @@ python3 -m sender.hand.manus_sender --target-ip 192.168.0.10 --retarget ergo-dir
 
 # Manus sender ([3A] dex_retarget — DexPilot fingertip 최적화, manus_data_publisher 필요)
 python3 -m sender.hand.manus_sender --target-ip 192.168.0.10 --retarget dex --sdk-mode ros2
+
+# RealSense sender ([3A] dex_retarget — D405 + MediaPipe + DexPilot)
+python3 -m sender.hand.realsense_sender --target-ip 192.168.0.10 --hand right
 ```
 
 ### 1.6 PYTHONPATH 설정
@@ -251,12 +256,14 @@ python3 -m robot.arm.admittance.main --mode rtde --input unified --robot-ip 192.
 |--------|------|------|
 | numpy (<2.0) | pip/conda | 좌표 변환 + dex_retargeting/pinocchio ABI 호환 |
 | openvr | pip | Vive Tracker SteamVR API |
-| pynput | pip | 키보드 상태 (vive_sender) |
+| pynput | pip | 키보드 상태 (vive_sender, manus_sender, realsense_sender) |
 | pyyaml | pip | YAML 설정 파싱 |
 | pygame | pip | 조이스틱 입력 |
 | libusb | apt/conda | Manus SDK |
-| dex_retargeting | pip | manus_sender `--retarget dex` (DexPilot/Vector) |
-| mediapipe==0.10.21 | pip | dex_retargeting examples (`mediapipe.framework`) |
+| dex_retargeting | pip | manus_sender (dex 모드) + realsense_sender |
+| mediapipe==0.10.21 | pip | MediaPipe HandLandmarker (realsense_sender) |
+| pyrealsense2 | pip | Intel RealSense D405 (realsense_sender) |
+| opencv-python | pip | 시각화 + BGR↔RGB (realsense_sender) |
 
 ### 로봇 PC (robot/)
 

@@ -2,10 +2,11 @@
 # teleop_dev sender 실행 환경 — ROS2 불필요
 #
 # 실행 예시:
-#   python3 -m sender.arm.vive_sender     --target-ip <ROBOT_IP>
-#   python3 -m sender.arm.keyboard_sender  --target-ip <ROBOT_IP>
-#   python3 -m sender.arm.joystick_sender  --target-ip <ROBOT_IP>
-#   python3 -m sender.hand.manus_sender    --target-ip <ROBOT_IP>
+#   python3 -m sender.arm.vive_sender       --target-ip <ROBOT_IP>
+#   python3 -m sender.arm.keyboard_sender   --target-ip <ROBOT_IP>
+#   python3 -m sender.arm.joystick_sender   --target-ip <ROBOT_IP>
+#   python3 -m sender.hand.manus_sender     --target-ip <ROBOT_IP>
+#   python3 -m sender.hand.realsense_sender --target-ip <ROBOT_IP>
 #
 # Setup:
 #   conda env create -f environment.yaml
@@ -25,5 +26,7 @@ dependencies:
     - pynput>=1.7.6         # 키보드 입력 (vive_sender KeyboardStateTracker)
     - pyyaml>=6.0           # Vive/Manus config 파싱
     - pygame>=2.0.0         # 조이스틱/게임패드 입력 (joystick_sender)
-    - dex_retargeting       # [3A] manus_sender --retarget dex (DexPilot/Vector)
-    - "mediapipe==0.10.21"  # dex_retargeting examples 호환 (framework 모듈)
+    - dex_retargeting       # [3A] DexPilot/Vector — manus_sender + realsense_sender
+    - "mediapipe==0.10.21"  # MediaPipe HandLandmarker (realsense_sender) + dex_retargeting examples
+    - pyrealsense2          # Intel RealSense D405 (realsense_sender)
+    - opencv-python         # 시각화 + BGR↔RGB (realsense_sender)
