@@ -1,19 +1,30 @@
 #!/usr/bin/env python3
-"""Manus UDP receiver → DG5F PID controller (MultiDOFCommand).
+"""Manus / RealSense UDP receiver → DG5F controller.
 
-Receives DG5F joint angles via UDP from manus_sender on operator PC
-and publishes to pid_controller/PidController. Sender handles all
-retargeting — receiver is passthrough with EMA smoothing.
+Receives DG5F joint angles via UDP from manus_sender or realsense_sender
+on the operator PC and publishes them to one of two destinations:
 
-Requires dg5f_driver (PID mode) running:
+    --mode real  (default): MultiDOFCommand → pid_controller/PidController
+                            (real hardware dg5f_driver)
+    --mode sim            : JointState → /dg5f_{hand}/joint_commands
+                            (Isaac Sim DG5F controller)
+
+Sender handles all retargeting — receiver is passthrough with EMA smoothing.
+
+Requires (real mode) dg5f_driver PID controller running:
     ros2 launch dg5f_driver dg5f_right_pid_all_controller.launch.py delto_ip:=169.254.186.72
 
+Requires (sim mode) Isaac Sim with DG5F subscribing to /dg5f_{hand}/joint_commands.
+
 Usage:
-    # Dry-run (no hardware — just receive + print):
+    # Dry-run (no ROS2 publishing — just receive + print):
     python3 -m robot.hand.receiver --dry-run
 
-    # ROS2 mode (dg5f_driver pid_all must be running):
+    # Real hardware mode (default):
     python3 -m robot.hand.receiver --hand right
+
+    # Isaac Sim mode:
+    python3 -m robot.hand.receiver --hand right --mode sim
 
     # Custom port / rate:
     python3 -m robot.hand.receiver --hand right --port 9872 --hz 60
@@ -160,18 +171,27 @@ def main():
                         help="Control loop Hz")
     parser.add_argument("--dry-run", action="store_true",
                         help="No ROS2 publishing — just receive + print")
+    parser.add_argument("--mode", default="real",
+                        choices=["real", "sim"],
+                        help="real=dg5f_driver PidController (default), "
+                             "sim=Isaac Sim /joint_commands JointState")
     parser.add_argument("--motion-time", type=int, default=50,
-                        help="Per-joint motion time in ms")
+                        help="Per-joint motion time in ms (legacy, unused in PID mode)")
     parser.add_argument("--ema-alpha", type=float, default=0.3,
                         help="EMA filter alpha (0=frozen, 1=no filter)")
     args = parser.parse_args()
 
+    if args.dry_run:
+        live_label = "DRY RUN"
+    else:
+        live_label = f"LIVE (ROS2, mode={args.mode})"
+
     print("=" * 70)
-    print("  Manus → DG5F Receiver (passthrough + EMA)")
-    print(f"  Mode: {'DRY RUN' if args.dry_run else 'LIVE (ROS2)'}")
+    print("  Manus/RealSense → DG5F Receiver (passthrough + EMA)")
+    print(f"  Mode: {live_label}")
     print(f"  UDP: 0.0.0.0:{args.port}")
     print(f"  Hand: {args.hand}")
-    print(f"  Rate: {args.hz} Hz | Motion time: {args.motion_time} ms | EMA: {args.ema_alpha}")
+    print(f"  Rate: {args.hz} Hz | EMA: {args.ema_alpha}")
     print("  Controls: Ctrl+C = Quit")
     print("=" * 70)
 
@@ -183,9 +203,11 @@ def main():
         from robot.hand.dg5f_ros2_client import DG5FROS2Client
         client = DG5FROS2Client(
             hand_side=args.hand,
+            mode=args.mode,
             motion_time_ms=args.motion_time,
         )
-        print(f"  [ROS2] DG5FROS2Client initialized ({args.hand} hand)")
+        print(f"  [ROS2] DG5FROS2Client initialized "
+              f"({args.hand} hand, mode={args.mode}, topic={client.command_topic})")
 
     # Setup UDP receiver
     receiver = ManusReceiver(port=args.port)

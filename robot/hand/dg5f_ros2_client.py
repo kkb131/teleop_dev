@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
 """ROS2 topic-based client for Tesollo DG5F hand.
 
-Replaces the Modbus-based DG5FClient with ROS2 JointTrajectory publishing.
-Requires dg5f_driver running via ros2 launch.
+Two modes:
+    - "real": publishes MultiDOFCommand to /{prefix}/{side}_dg_pospid/reference
+              (real hardware PID controller, dg5f_driver).
+    - "sim":  publishes JointState to /{prefix}/joint_commands
+              (Isaac Sim DG5F controller).
 
 Usage:
     from robot.hand.dg5f_ros2_client import DG5FROS2Client
 
     rclpy.init()
-    client = DG5FROS2Client(hand_side="right")
+    client = DG5FROS2Client(hand_side="right", mode="real")   # hardware
+    client = DG5FROS2Client(hand_side="right", mode="sim")    # Isaac Sim
     client.set_positions([0.0] * 20)
     client.destroy_node()
     rclpy.shutdown()
@@ -45,36 +49,55 @@ LEFT_JOINT_NAMES = [
 class DG5FROS2Client(Node):
     """ROS2-based DG5F hand controller.
 
-    Compatible interface with DG5FClient (Modbus version).
-
     Parameters
     ----------
     hand_side : str
         "left" or "right".
+    mode : str
+        "real" — publish MultiDOFCommand to /{prefix}/{side}_dg_pospid/reference
+                 (real hardware PidController, dg5f_driver).
+        "sim"  — publish JointState to /{prefix}/joint_commands
+                 (Isaac Sim DG5F controller).
     motion_time_ms : int
-        Default trajectory duration in milliseconds.
+        Legacy parameter (kept for backward compatibility, unused in PID mode).
     """
 
-    def __init__(self, hand_side: str = "right", motion_time_ms: int = 50):
+    def __init__(self,
+                 hand_side: str = "right",
+                 mode: str = "real",
+                 motion_time_ms: int = 50):
         super().__init__("dg5f_ros2_client")
+        if mode not in ("real", "sim"):
+            raise ValueError(f"mode must be 'real' or 'sim', got '{mode}'")
         self._hand_side = hand_side
+        self._mode = mode
         self._motion_time_s = motion_time_ms / 1000.0
 
         prefix = f"dg5f_{hand_side}"
         side_prefix = "rj" if hand_side == "right" else "lj"
         self._joint_names = RIGHT_JOINT_NAMES if hand_side == "right" else LEFT_JOINT_NAMES
 
-        # Publisher for PidController (MultiDOFCommand)
-        pid_topic = f"/{prefix}/{side_prefix}_dg_pospid/reference"
+        # Publisher (mode-dependent)
         qos = QoSProfile(
             depth=10,
             reliability=ReliabilityPolicy.BEST_EFFORT,
             durability=DurabilityPolicy.VOLATILE,
         )
-        self._pub = self.create_publisher(MultiDOFCommand, pid_topic, qos)
-        self.get_logger().info(f"[DG5F-ROS2] Publishing to: {pid_topic}")
+        if mode == "real":
+            # Real hardware PidController expects MultiDOFCommand
+            cmd_topic = f"/{prefix}/{side_prefix}_dg_pospid/reference"
+            self._pub = self.create_publisher(MultiDOFCommand, cmd_topic, qos)
+        else:
+            # Isaac Sim DG5F controller expects JointState on joint_commands
+            cmd_topic = f"/{prefix}/joint_commands"
+            self._pub = self.create_publisher(JointState, cmd_topic, qos)
+        self._cmd_topic = cmd_topic
+        self.get_logger().info(
+            f"[DG5F-ROS2] mode={mode}, publishing to: {cmd_topic}"
+        )
 
-        # Subscriber for feedback
+        # Subscriber for feedback (same topic in both modes — Isaac Sim also
+        # publishes /joint_states from the URDF state publisher)
         js_topic = f"/{prefix}/joint_states"
         self._lock = threading.Lock()
         self._latest_positions = np.zeros(NUM_MOTORS)
@@ -113,15 +136,33 @@ class DG5FROS2Client(Node):
         self.get_logger().info("[DG5F-ROS2] stop() — managed by dg5f_driver")
 
     def set_positions(self, angles_rad: list | np.ndarray):
-        """Publish target positions as MultiDOFCommand to PidController."""
+        """Publish target positions.
+
+        - real mode: MultiDOFCommand to /{prefix}/{side}_dg_pospid/reference
+        - sim  mode: JointState     to /{prefix}/joint_commands
+        """
         if len(angles_rad) != NUM_MOTORS:
             raise ValueError(f"Expected {NUM_MOTORS} angles, got {len(angles_rad)}")
 
-        msg = MultiDOFCommand()
-        msg.dof_names = list(self._joint_names)
-        msg.values = [float(a) for a in angles_rad]
+        if self._mode == "real":
+            msg = MultiDOFCommand()
+            msg.dof_names = list(self._joint_names)
+            msg.values = [float(a) for a in angles_rad]
+        else:
+            msg = JointState()
+            msg.header.stamp = self.get_clock().now().to_msg()
+            msg.name = list(self._joint_names)
+            msg.position = [float(a) for a in angles_rad]
 
         self._pub.publish(msg)
+
+    @property
+    def mode(self) -> str:
+        return self._mode
+
+    @property
+    def command_topic(self) -> str:
+        return self._cmd_topic
 
     def set_motion_times(self, times_ms: list | np.ndarray):
         """Update default motion time (uses first value)."""
