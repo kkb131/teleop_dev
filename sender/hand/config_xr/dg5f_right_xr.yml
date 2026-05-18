@@ -1,0 +1,35 @@
+# Tesollo DG-5F retargeting config (WebXR 25-joint → 20 DG-5F joint).
+#
+# 출처: xr_teleop/assets/dg5f_hand/dg5f_right.yml — DexPilot 검증 설정 그대로.
+#
+# 주요 결정 (xr_teleop Week 4 U5+ / U5++):
+#   - type: DexPilot (vector 보다 pinch 정확도 우월, retarget_dev/docs/dg5f_tuning.md)
+#   - urdf: dg5f_right_retarget.urdf (PIP/DIP lower=0 으로 음수 영역 제거, fist 형 lock 회피)
+#   - scaling_factor: 1.2 (DG-5F 가 사람 손 ~1.2배 큼 → 사람 손 확대해 매칭)
+#   - low_pass_alpha: 0.2 (스무딩, jitter 완화)
+#
+# WebXR 25-joint fingertip 인덱스:
+#   wrist=0, thumb=4, index=9, middle=14, ring=19, pinky=24
+# DexPilot 의 auto-generated target_link_human_indices = [4, 9, 14, 19, 24] (WebXR
+# 그대로). Inspire / BrainCo upstream 패턴 과 100% 일치 (xr_teleop U5+ 검증).
+# 명시 지정으로 향후 convention toggle (MANO 21 인덱스 시도 등) 시 빠른 변경 용이.
+
+right:
+  type: DexPilot
+  # urdf_path 는 RetargetingConfig.set_default_urdf_dir(...) 가 가리키는 dir 기준 상대 경로.
+  # XRDexRetargeter 는 default 로 본 파일이 있는 dir 를 urdf_dir 로 설정.
+  urdf_path: dg5f_right_retarget.urdf
+
+  # DexPilot 필수: wrist + 5 fingertip link
+  wrist_link_name: "rl_dg_palm"
+  finger_tip_link_names:
+    - "rl_dg_1_tip"  # Thumb
+    - "rl_dg_2_tip"  # Index
+    - "rl_dg_3_tip"  # Middle
+    - "rl_dg_4_tip"  # Ring
+    - "rl_dg_5_tip"  # Pinky
+
+  # 사람 손 ~1.2배 확대 (DG-5F 가 1.2~1.3배 큼)
+  scaling_factor: 1.2
+  # 작을수록 smooth, latency ↑
+  low_pass_alpha: 0.2
