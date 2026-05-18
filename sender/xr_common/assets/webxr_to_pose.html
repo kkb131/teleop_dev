@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>WebXR → pose ws bridge (teleop_dev)</title>
+<style>
+  html, body {
+    margin: 0; padding: 0;
+    background: #0a0a0a; color: #e8e8e8;
+    font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+    font-size: 20px; line-height: 1.45;
+  }
+  main { max-width: 900px; padding: 16px 20px 64px; margin: 0 auto; }
+  h1 { font-size: 26px; margin: 4px 0 12px; color: #ffd866; }
+  h2 { font-size: 22px; margin: 24px 0 8px; color: #a9dc76; border-bottom: 1px solid #333; padding-bottom: 4px; }
+  pre {
+    background: #161616; border: 1px solid #2a2a2a; border-radius: 6px;
+    padding: 12px 14px; white-space: pre-wrap; word-break: break-all;
+    font-size: 18px; line-height: 1.4;
+    max-height: 60vh; overflow-y: auto;
+  }
+  button {
+    display: block; width: 100%;
+    margin: 8px 0; padding: 14px 16px;
+    background: #1f6feb; color: white; border: 0; border-radius: 6px;
+    font-size: 20px; font-weight: 600; cursor: pointer;
+  }
+  button:disabled { background: #333; color: #777; cursor: not-allowed; }
+  button.danger { background: #b62324; }
+  button.alt { background: #6a4cff; }
+  .ok    { color: #a9dc76; font-weight: 700; }
+  .fail  { color: #ff6188; font-weight: 700; }
+  .warn  { color: #ffd866; }
+  .muted { color: #888; }
+</style>
+</head>
+<body>
+<main>
+  <h1>WebXR pose stream → teleop_dev ws bridge</h1>
+  <p class="muted">XR-RAF onFrame 에서 매 frame head/hand pose JSON 송신 (ws). teleop_dev sender (arm + hand) 가 이 ws 의 shared array 를 읽어 UDP 로 로봇 PC 에 송신. 영상 통합은 추후 WebRTC 기능 추가 시 활성 (현재 비활성 default).</p>
+  <p class="muted">URL 쿼리: <code>?webrtc_off=1</code> 영상 강제 비활성, <code>?webrtc_port=60001</code> head 카메라 포트, <code>?webrtc_host=192.168.0.10</code> 카메라 publisher host.</p>
+
+  <h2>1. Auto diagnostic + WS status</h2>
+  <pre id="auto">running...</pre>
+
+  <h2>2. Enter session</h2>
+  <button id="btn-vr"  disabled>Enter VR (optional hand-tracking)</button>
+  <button id="btn-ar"  class="alt"    disabled>Enter AR (optional hand-tracking) — pass-through</button>
+  <button id="btn-end" class="danger" disabled>End XR session</button>
+
+  <h2>3. Live session log</h2>
+  <pre id="live">(no active session)</pre>
+</main>
+
+<!-- off-screen video element — WebRTC stream sink. 비활성 시 미사용. -->
+<video id="webrtc-video" autoplay playsinline muted
+       style="position:absolute; left:-1px; top:-1px; width:1px; height:1px; opacity:0; pointer-events:none;"></video>
+
+<script>
+const $auto = document.getElementById('auto');
+const $live = document.getElementById('live');
+const $btnVR    = document.getElementById('btn-vr');
+const $btnAR    = document.getElementById('btn-ar');
+const $btnEnd   = document.getElementById('btn-end');
+
+// ── helpers ───────────────────────────────────────────────────────────
+function autoLog(line, cls) {
+  const span = cls ? `<span class="${cls}">${line}</span>` : line;
+  $auto.innerHTML = ($auto.innerHTML === 'running...' ? '' : $auto.innerHTML) + span + '\n';
+}
+let liveBuf = [];
+function liveLog(line) {
+  const ts = new Date().toISOString().substr(11, 12);
+  liveBuf.push(`[${ts}] ${line}`);
+  if (liveBuf.length > 200) liveBuf.shift();
+  $live.textContent = liveBuf.join('\n');
+  $live.scrollTop = $live.scrollHeight;
+}
+
+// ── ws client ─────────────────────────────────────────────────────────
+let ws = null;
+let wsSent = 0, wsFailures = 0;
+
+function wsState() { return ws ? ['connecting','open','closing','closed'][ws.readyState] : 'none'; }
+
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const url = `${proto}//${location.host}/pose`;
+  ws = new WebSocket(url);
+  ws.addEventListener('open',  () => liveLog(`ws open: ${url}`));
+  ws.addEventListener('error', () => liveLog('ws error'));
+  ws.addEventListener('close', () => {
+    liveLog('ws closed; reconnect in 1s');
+    setTimeout(connectWS, 1000);
+  });
+}
+connectWS();
+
+function wsSend(obj) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) { wsFailures++; return false; }
+  try { ws.send(JSON.stringify(obj)); wsSent++; return true; }
+  catch (e) { wsFailures++; return false; }
+}
+
+// ── WebXR 25 joint names (teleop_dev/sender/xr_common JOINT_NAMES 와 1:1 일치) ─
+const JOINT_NAMES = [
+  'wrist',
+  'thumb-metacarpal','thumb-phalanx-proximal','thumb-phalanx-distal','thumb-tip',
+  'index-finger-metacarpal','index-finger-phalanx-proximal',
+  'index-finger-phalanx-intermediate','index-finger-phalanx-distal','index-finger-tip',
+  'middle-finger-metacarpal','middle-finger-phalanx-proximal',
+  'middle-finger-phalanx-intermediate','middle-finger-phalanx-distal','middle-finger-tip',
+  'ring-finger-metacarpal','ring-finger-phalanx-proximal',
+  'ring-finger-phalanx-intermediate','ring-finger-phalanx-distal','ring-finger-tip',
+  'pinky-finger-metacarpal','pinky-finger-phalanx-proximal',
+  'pinky-finger-phalanx-intermediate','pinky-finger-phalanx-distal','pinky-finger-tip',
+];
+
+// ── auto diagnostic ───────────────────────────────────────────────────
+async function runAuto() {
+  $auto.innerHTML = '';
+  autoLog('User-Agent: ' + navigator.userAgent);
+  autoLog('Origin    : ' + location.origin);
+  autoLog('ws target : ' + (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/pose');
+  const xrType = typeof navigator.xr;
+  autoLog('typeof navigator.xr: ' + xrType, xrType === 'object' ? 'ok' : 'fail');
+  if (xrType !== 'object') {
+    autoLog('→ navigator.xr undefined: WebXR not exposed.', 'fail');
+    return;
+  }
+  let vrOK = false, arOK = false;
+  try { vrOK = await navigator.xr.isSessionSupported('immersive-vr'); } catch (e) {}
+  try { arOK = await navigator.xr.isSessionSupported('immersive-ar'); } catch (e) {}
+  autoLog('immersive-vr: ' + vrOK, vrOK ? 'ok' : 'fail');
+  autoLog('immersive-ar: ' + arOK, arOK ? 'ok' : 'fail');
+  $btnVR.disabled = !vrOK;
+  $btnAR.disabled = !arOK;
+}
+
+// ── 설정 로딩 (sender/xr_common/config.yaml ← BridgePoseStore /config endpoint) ─
+const URL_PARAMS = new URLSearchParams(location.search);
+let CONFIG = {
+  ws:     { port: 8013 },
+  webrtc: { enabled: false, host: 'localhost',
+            ports: { head: 60001, left_wrist: 60002, right_wrist: 60003 } },
+  render: { plane_distance_m: 1.0, plane_width_m: 1.6, plane_height_m: 0.9 },
+};
+let WEBRTC_PORT, WEBRTC_OFF, WEBRTC_HOST;
+let PLANE_D, PLANE_W, PLANE_H;
+function _applyConfig() {
+  WEBRTC_PORT = parseInt(URL_PARAMS.get('webrtc_port') || String(CONFIG.webrtc.ports.head), 10);
+  // env webrtc.enabled=false 면 영상 강제 비활성 (현재 teleop_dev default).
+  WEBRTC_OFF  = URL_PARAMS.get('webrtc_off') === '1' || CONFIG.webrtc.enabled === false;
+  WEBRTC_HOST = URL_PARAMS.get('webrtc_host') || CONFIG.webrtc.host || location.hostname || 'localhost';
+  PLANE_D = parseFloat(URL_PARAMS.get('plane_distance') || String(CONFIG.render.plane_distance_m));
+  PLANE_W = parseFloat(URL_PARAMS.get('plane_width')    || String(CONFIG.render.plane_width_m));
+  PLANE_H = parseFloat(URL_PARAMS.get('plane_height')   || String(CONFIG.render.plane_height_m));
+}
+_applyConfig();
+fetch('/config')
+  .then(r => r.ok ? r.json() : null)
+  .then(cfg => {
+    if (cfg) {
+      CONFIG = cfg; _applyConfig();
+      const state = WEBRTC_OFF ? 'OFF (pose-only)' : `${WEBRTC_HOST}:${WEBRTC_PORT}`;
+      autoLog(`config loaded: webrtc=${state} plane=${PLANE_D}m ${PLANE_W}×${PLANE_H}m`, 'ok');
+      if (WEBRTC_OFF) autoLog('영상 plane 비활성. 헤드셋 안에선 검은 배경 + WebGL clear만 보임.', 'muted');
+    }
+  })
+  .catch(e => autoLog('config fetch failed (using defaults): ' + e.message, 'warn'));
+
+const videoEl = document.getElementById('webrtc-video');
+let pc = null;
+let pcTrackBound = false;
+
+async function _connectWebRTC() {
+  if (WEBRTC_OFF) { liveLog('webrtc: disabled (config.webrtc.enabled=false)'); return; }
+  if (pc) { try { pc.close(); } catch (e) {} pc = null; }
+  pc = new RTCPeerConnection({ iceServers: [] });
+  pc.addTransceiver('video', { direction: 'recvonly' });
+  pc.ontrack = (event) => {
+    pcTrackBound = true;
+    liveLog(`webrtc ontrack: kind=${event.track.kind}`);
+    try { event.track.contentHint = 'motion'; } catch (e) {}
+    try {
+      if (event.receiver && 'playoutDelayHint' in event.receiver) {
+        event.receiver.playoutDelayHint = 0;
+        liveLog('webrtc receiver.playoutDelayHint=0');
+      }
+    } catch (e) {}
+    videoEl.srcObject = event.streams[0];
+    videoEl.play().catch(e => liveLog('video.play() error: ' + e.message));
+  };
+  pc.oniceconnectionstatechange = () => liveLog(`webrtc ice: ${pc.iceConnectionState}`);
+  pc.onconnectionstatechange    = () => liveLog(`webrtc pc:  ${pc.connectionState}`);
+
+  const url = `https://${WEBRTC_HOST}:${WEBRTC_PORT}/offer`;
+  try {
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    liveLog(`webrtc POST ${url}`);
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sdp: pc.localDescription.sdp, type: pc.localDescription.type }),
+    });
+    if (!resp.ok) { liveLog(`webrtc /offer status=${resp.status}`); return; }
+    const answer = await resp.json();
+    await pc.setRemoteDescription(answer);
+    liveLog('webrtc setRemoteDescription OK');
+  } catch (e) {
+    liveLog(`webrtc FAIL: ${e.name} — ${e.message}`);
+    liveLog(`  → ${url} cert을 헤드셋 Chrome에서 한 번 신뢰했는지 확인`);
+  }
+}
+
+function _disconnectWebRTC() {
+  if (pc) { try { pc.close(); } catch(e) {} pc = null; }
+  if (videoEl) videoEl.srcObject = null;
+  pcTrackBound = false;
+}
+
+// ── WebGL render resources — webrtc enabled 시에만 사용 ───────────────
+let shaderProgram = null;
+let attrPos = -1, attrUv = -1;
+let uniformProj = null, uniformView = null, uniformModel = null, uniformTex = null;
+let quadBuffer = null;
+let videoTexture = null;
+let videoTexW = 0, videoTexH = 0;
+
+function _initRenderResources() {
+  if (shaderProgram) return;
+  const vsSrc = `#version 300 es
+in vec3 a_pos;
+in vec2 a_uv;
+uniform mat4 u_proj;
+uniform mat4 u_view;
+uniform mat4 u_model;
+out vec2 v_uv;
+void main() {
+  gl_Position = u_proj * u_view * u_model * vec4(a_pos, 1.0);
+  v_uv = a_uv;
+}`;
+  const fsSrc = `#version 300 es
+precision mediump float;
+in vec2 v_uv;
+uniform sampler2D u_tex;
+out vec4 outColor;
+void main() {
+  outColor = texture(u_tex, v_uv);
+}`;
+
+  const compile = (type, src) => {
+    const sh = gl.createShader(type);
+    gl.shaderSource(sh, src);
+    gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+      liveLog('shader compile error: ' + gl.getShaderInfoLog(sh));
+    }
+    return sh;
+  };
+  const vs = compile(gl.VERTEX_SHADER, vsSrc);
+  const fs = compile(gl.FRAGMENT_SHADER, fsSrc);
+  shaderProgram = gl.createProgram();
+  gl.attachShader(shaderProgram, vs);
+  gl.attachShader(shaderProgram, fs);
+  gl.linkProgram(shaderProgram);
+  if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+    liveLog('program link error: ' + gl.getProgramInfoLog(shaderProgram));
+  }
+  attrPos      = gl.getAttribLocation(shaderProgram, 'a_pos');
+  attrUv       = gl.getAttribLocation(shaderProgram, 'a_uv');
+  uniformProj  = gl.getUniformLocation(shaderProgram, 'u_proj');
+  uniformView  = gl.getUniformLocation(shaderProgram, 'u_view');
+  uniformModel = gl.getUniformLocation(shaderProgram, 'u_model');
+  uniformTex   = gl.getUniformLocation(shaderProgram, 'u_tex');
+
+  const D = -PLANE_D;
+  const W = PLANE_W / 2, H = PLANE_H / 2;
+  const verts = new Float32Array([
+    -W, -H, D,     0.0, 1.0,
+     W, -H, D,     1.0, 1.0,
+    -W,  H, D,     0.0, 0.0,
+     W,  H, D,     1.0, 0.0,
+  ]);
+  quadBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
+
+  videoTexture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, videoTexture);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+  liveLog('webgl render resources initialized');
+}
+
+function _uploadVideoFrame() {
+  if (!videoEl || videoEl.readyState < 2) return;
+  _initRenderResources();
+  gl.bindTexture(gl.TEXTURE_2D, videoTexture);
+  if (videoEl.videoWidth !== videoTexW || videoEl.videoHeight !== videoTexH) {
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, videoEl);
+    videoTexW = videoEl.videoWidth;
+    videoTexH = videoEl.videoHeight;
+  } else {
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, videoEl);
+  }
+}
+
+function _drawVideoPlane(view, modelMatrix) {
+  if (!videoEl || videoEl.readyState < 2) return;
+  gl.useProgram(shaderProgram);
+  gl.uniformMatrix4fv(uniformProj,  false, view.projectionMatrix);
+  gl.uniformMatrix4fv(uniformView,  false, view.transform.inverse.matrix);
+  gl.uniformMatrix4fv(uniformModel, false, modelMatrix);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, videoTexture);
+  gl.uniform1i(uniformTex, 0);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+  gl.enableVertexAttribArray(attrPos);
+  gl.vertexAttribPointer(attrPos, 3, gl.FLOAT, false, 5 * 4, 0);
+  gl.enableVertexAttribArray(attrUv);
+  gl.vertexAttribPointer(attrUv, 2, gl.FLOAT, false, 5 * 4, 3 * 4);
+
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
+// ── session lifecycle ─────────────────────────────────────────────────
+let xrSession = null, xrRefSpace = null, gl = null, xrCanvas = null;
+let frameCount = 0, lastFrameLog = 0;
+
+async function startSession(mode) {
+  liveBuf = [];
+  liveLog(`requesting ${mode}`);
+  try {
+    xrCanvas = document.createElement('canvas');
+    gl = xrCanvas.getContext('webgl2', { xrCompatible: true, alpha: true, premultipliedAlpha: false });
+    if (!gl) { liveLog('FAIL: webgl2 xrCompatible context unavailable'); return; }
+    await gl.makeXRCompatible();
+
+    xrSession = await navigator.xr.requestSession(mode, {
+      optionalFeatures: ['hand-tracking', 'local-floor']
+    });
+    liveLog('session started: ' + mode);
+
+    xrSession.updateRenderState({ baseLayer: new XRWebGLLayer(xrSession, gl) });
+    try {
+      xrRefSpace = await xrSession.requestReferenceSpace('local-floor');
+      liveLog('refSpace: local-floor');
+    } catch (e) {
+      liveLog('local-floor failed (' + e.name + '), falling back to local');
+      xrRefSpace = await xrSession.requestReferenceSpace('local');
+    }
+
+    xrSession.addEventListener('inputsourceschange', () => {
+      let hands = 0, ctrls = 0;
+      for (const s of xrSession.inputSources) {
+        if (s.hand) hands++; else ctrls++;
+      }
+      liveLog(`inputsourceschange: hands=${hands} controllers=${ctrls}`);
+    });
+    xrSession.addEventListener('end', () => {
+      liveLog(`session ended (frames=${frameCount} ws.sent=${wsSent} ws.failures=${wsFailures})`);
+      _disconnectWebRTC();
+      shaderProgram = null; quadBuffer = null; videoTexture = null;
+      videoTexW = 0; videoTexH = 0;
+      xrSession = null; xrRefSpace = null; gl = null;
+      $btnVR.disabled = false; $btnAR.disabled = false;
+      $btnEnd.disabled = true;
+      runAuto();
+    });
+
+    $btnVR.disabled = true; $btnAR.disabled = true; $btnEnd.disabled = false;
+
+    frameCount = 0; lastFrameLog = performance.now(); wsSent = 0; wsFailures = 0;
+
+    _connectWebRTC().catch(e => liveLog('webrtc connect threw: ' + e.message));
+
+    xrSession.requestAnimationFrame(onFrame);
+  } catch (e) {
+    liveLog('FAIL: ' + e.name + ' — ' + e.message);
+  }
+}
+
+function onFrame(time, frame) {
+  if (!xrSession) return;
+  xrSession.requestAnimationFrame(onFrame);
+  frameCount++;
+
+  const layer = xrSession.renderState.baseLayer;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, layer.framebuffer);
+  gl.clearColor(0, 0, 0, 0);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+  const viewerPose = frame.getViewerPose(xrRefSpace);
+  if (viewerPose) {
+    const m = viewerPose.transform.matrix;
+    wsSend({ type: 'head', ts: time, matrix: Array.from(m) });
+
+    // webrtc enabled 일 때만 video plane render. 비활성 시 background 만 clear.
+    if (!WEBRTC_OFF) {
+      _uploadVideoFrame();
+      for (const view of viewerPose.views) {
+        const vp = layer.getViewport(view);
+        gl.viewport(vp.x, vp.y, vp.width, vp.height);
+        _drawVideoPlane(view, m);
+      }
+    }
+  }
+
+  let curHandCount = 0;
+  let firstWristStr = null;
+  const ZERO_ORI = [0,0,0, 0,0,0, 0,0,0];
+  for (const src of frame.session.inputSources) {
+    if (!src.hand) continue;
+    curHandCount++;
+    const positions = new Array(JOINT_NAMES.length);
+    const orientations = new Array(JOINT_NAMES.length);
+    let wristMatrix = null;
+    for (let i = 0; i < JOINT_NAMES.length; i++) {
+      const joint = src.hand.get(JOINT_NAMES[i]);
+      if (!joint) { positions[i] = [0, 0, 0]; orientations[i] = ZERO_ORI; continue; }
+      const jp = frame.getJointPose(joint, xrRefSpace);
+      if (!jp)   { positions[i] = [0, 0, 0]; orientations[i] = ZERO_ORI; continue; }
+      const p = jp.transform.position;
+      positions[i] = [p.x, p.y, p.z];
+      const m = jp.transform.matrix;
+      orientations[i] = [m[0], m[1], m[2], m[4], m[5], m[6], m[8], m[9], m[10]];
+      if (i === 0) {
+        wristMatrix = Array.from(m);
+        if (!firstWristStr) {
+          firstWristStr = `${src.handedness}.wrist=[${p.x.toFixed(3)}, ${p.y.toFixed(3)}, ${p.z.toFixed(3)}]`;
+        }
+      }
+    }
+    if (wristMatrix) {
+      wsSend({
+        type: 'hand', ts: time,
+        handedness: src.handedness,
+        wrist: wristMatrix,
+        positions: positions,
+        orientations: orientations,
+      });
+    }
+  }
+
+  const now = performance.now();
+  if (now - lastFrameLog > 1000) {
+    const sent = wsSent; wsSent = 0;
+    const fail = wsFailures; wsFailures = 0;
+    lastFrameLog = now;
+    liveLog(
+      `xrFrame=${frameCount} ws.sent=${sent}/s ws.fail=${fail}/s ws=${wsState()} ` +
+      `hands=${curHandCount}` + (firstWristStr ? '  ' + firstWristStr : '')
+    );
+  }
+}
+
+$btnVR.onclick  = () => startSession('immersive-vr');
+$btnAR.onclick  = () => startSession('immersive-ar');
+$btnEnd.onclick = () => xrSession && xrSession.end();
+
+runAuto();
+</script>
+</body>
+</html>

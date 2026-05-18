@@ -7,6 +7,7 @@
 #   python3 -m sender.arm.joystick_sender   --target-ip <ROBOT_IP>
 #   python3 -m sender.hand.manus_sender     --target-ip <ROBOT_IP>
 #   python3 -m sender.hand.realsense_sender --target-ip <ROBOT_IP>
+#   python3 -m scripts.run_xr_teleop        --target-ip <ROBOT_IP>      # Galaxy XR / Quest 3
 #
 # Setup:
 #   conda env create -f environment.yaml
@@ -30,3 +31,4 @@ dependencies:
     - "mediapipe==0.10.21"  # MediaPipe HandLandmarker (realsense_sender) + dex_retargeting examples
     - pyrealsense2          # Intel RealSense D405 (realsense_sender)
     - opencv-python         # 시각화 + BGR↔RGB (realsense_sender)
+    - aiohttp>=3.8          # Galaxy XR / Quest 3 ws bridge HTTP+WS server (xr_common.bridge_pose_store)

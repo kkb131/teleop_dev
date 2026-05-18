@@ -1,0 +1,37 @@
+# Galaxy XR / Quest 3 ws bridge 설정 (teleop_dev 통합본).
+# Python (BridgePoseStore) + HTML (webxr_to_pose) 양쪽이 이 한 파일을 참조한다.
+#
+# - Python: bridge_pose_store.py 가 import time 에 yaml 로딩 후 자체 변수 설정 +
+#   /config endpoint 로 JSON export.
+# - HTML: webxr_to_pose.html 이 페이지 로드 시 fetch('/config') 로 받아서
+#   webrtc port/host, plane 크기 등 적용. URL 쿼리 (?webrtc_port=, ?webrtc_off=
+#   등) 는 항상 우선 override.
+#
+# 환경변수 override:
+#   XR_BRIDGE_PORT     — ws.port 강제 (default 8013)
+#   XR_BRIDGE_CONFIG   — 이 yaml 의 경로 강제 (default sender/xr_common/config.yaml)
+
+ws:
+  # BridgePoseStore HTTP/WS server port. webxr_to_pose 가 여기로 접속해
+  # /pose 로 pose JSON 송신.
+  port: 8013
+
+webrtc:
+  # ⚠️ 영상 통합은 추후 WebRTC 기능 구현 후 활성 예정.
+  # 현재 teleop_dev 의 로봇 PC 가 카메라 publisher 를 제공하지 않으므로
+  # 기본값을 false 로 둠. HTML 측에서 plane 자체를 안 그리고, BridgePoseStore
+  # 도 cert 신뢰 안내 / WebRTC failure 메시지 출력 안 함.
+  enabled: false
+  # 향후 활성 시 webrtc.host 만 변경하면 됨.
+  host: localhost
+  ports:
+    head: 60001
+    left_wrist: 60002
+    right_wrist: 60003
+
+render:
+  # head_camera plane 의 head-locked 위치/크기. webrtc.enabled=true 인 경우에만
+  # 의미. webrtc.enabled=false 이면 webxr_to_pose 가 plane 자체를 안 그림.
+  plane_distance_m: 1.0
+  plane_width_m: 1.6
+  plane_height_m: 0.9
