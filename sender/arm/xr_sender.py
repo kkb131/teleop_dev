@@ -47,6 +47,7 @@ from sender.arm.sender_base import (
 )
 from sender.arm.xr_frame_align import XRRelativeFrameAligner
 from sender.xr_common import BridgePoseStore
+from sender.xr_common.watchdog import StoreWatchdog, WorkspaceLimits
 
 from protocol.arm_protocol import ButtonState
 
@@ -86,18 +87,25 @@ class XRArmSender(TeleopSenderBase):
         bridge_port: Optional[int] = None,
         hand_side: str = "right",
         no_keyboard: bool = False,
+        watchdog_timeout_s: float = 0.2,
+        workspace: Optional[WorkspaceLimits] = None,
+        enforce_workspace: bool = True,
     ):
         super().__init__(target_ip, port, hz)
         self.scale = scale
         self.convention = convention
         self.hand_side = hand_side
         self.no_keyboard = no_keyboard
+        self.enforce_workspace = enforce_workspace
+        self.workspace = workspace if workspace is not None else WorkspaceLimits()
 
         # BridgePoseStore singleton — Phase B sender 와 같은 instance 공유 가능
         self._store = BridgePoseStore(use_hand_tracking=True, port=bridge_port)
         print(f"[XRArmSender] BridgePoseStore ready: http://localhost:{self._store.port}/")
 
         self._aligner = XRRelativeFrameAligner(scale=scale)
+        self._watchdog = StoreWatchdog(self._store, timeout_s=watchdog_timeout_s)
+        self._clamp_warn_count = 0
 
         # state machine
         self._started = False     # 'r' 키 누르기 전에는 robot origin 만 유지
@@ -215,12 +223,37 @@ class XRArmSender(TeleopSenderBase):
             result.buttons = buttons
             return result
 
+        # 2.5) watchdog — BridgePoseStore msg 신선도 확인.
+        # stale 이면 virtual_pose 유지 (마지막 valid target 송신 — robot 측이 자체
+        # admittance / safety 로 stationary 또는 천천히 정지).
+        if not self._watchdog.fresh():
+            if self._watchdog.stale_count in (1, 30, 300):  # 1회 / 0.6s / 6s
+                print(
+                    f"\n[XRArmSender] WARN: BridgePoseStore stale (count={self._watchdog.stale_count})"
+                    " — virtual_pose 유지, robot 명령 freeze"
+                )
+            result.buttons = buttons
+            return result
+
         if self.hand_side == "right":
             user_pose = self._store.right_arm_pose
         else:
             user_pose = self._store.left_arm_pose
 
         target_pos, target_quat = self._aligner.apply(user_pose)
+
+        # 2.7) workspace clamp (sender 측 안전 layer). robot PC 측 safety_monitor
+        # 가 별도로 envelope 검사하지만 sender 측에서도 clamp 해 큰 jump 회피.
+        if self.enforce_workspace:
+            clamped, was_clamped = self.workspace.clamp(target_pos)
+            if was_clamped:
+                self._clamp_warn_count += 1
+                if self._clamp_warn_count in (1, 30, 300):
+                    print(
+                        f"\n[XRArmSender] WARN: target pos {target_pos} → clamped {clamped}"
+                        f" (count={self._clamp_warn_count})"
+                    )
+                target_pos = clamped
 
         # 3) virtual_pos / virtual_quat 직접 set (sender_base 가 _send_packet 에서 사용)
         self._virtual_pos = target_pos
@@ -273,7 +306,20 @@ def main() -> int:
     parser.add_argument("--hand", default="right", choices=["right", "left"])
     parser.add_argument("--no-keyboard", action="store_true",
                         help="키 입력 없이 즉시 시작 (sshd / headless). 사용자가 손 시야 안 둔 채로 자동 calibrate 시도")
+    parser.add_argument("--watchdog-timeout-s", type=float, default=0.2,
+                        help="BridgePoseStore stale 판정 timeout (default 0.2s). "
+                             "msg age 가 이 값 초과 시 virtual_pose 유지 + warn.")
+    parser.add_argument("--no-workspace-clamp", action="store_true",
+                        help="workspace envelope clamp 비활성. 위험 — 디버그 / 검증 후에만 사용")
+    parser.add_argument("--workspace", default="default",
+                        help="workspace envelope (현재 default 만 지원: "
+                             "x=[-0.7,0.7], y=[-0.7,0.0], z=[0.05,0.8])")
     args = parser.parse_args()
+
+    workspace = WorkspaceLimits() if args.workspace == "default" else None
+    if workspace is None and not args.no_workspace_clamp:
+        print(f"[XRArmSender] unknown workspace {args.workspace!r}; using default")
+        workspace = WorkspaceLimits()
 
     sender = XRArmSender(
         target_ip=args.target_ip,
@@ -284,6 +330,9 @@ def main() -> int:
         bridge_port=args.bridge_port,
         hand_side=args.hand,
         no_keyboard=args.no_keyboard,
+        watchdog_timeout_s=args.watchdog_timeout_s,
+        workspace=workspace,
+        enforce_workspace=not args.no_workspace_clamp,
     )
     sender.run()
     return 0

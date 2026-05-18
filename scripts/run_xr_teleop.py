@@ -39,6 +39,7 @@ import time
 from typing import Optional
 
 from sender.xr_common import BridgePoseStore
+from sender.xr_common.watchdog import StoreWatchdog, WorkspaceLimits
 
 
 def _arm_thread_fn(args, store: BridgePoseStore, stop_event: threading.Event) -> None:
@@ -56,6 +57,9 @@ def _arm_thread_fn(args, store: BridgePoseStore, stop_event: threading.Event) ->
             bridge_port=args.bridge_port,
             hand_side=args.hand,
             no_keyboard=args.no_keyboard,
+            watchdog_timeout_s=args.watchdog_timeout_s,
+            workspace=WorkspaceLimits(),
+            enforce_workspace=not args.no_workspace_clamp,
         )
         sender.run()   # termios + 메인 루프
     except KeyboardInterrupt:
@@ -80,10 +84,12 @@ def _hand_thread_fn(args, store: BridgePoseStore, stop_event: threading.Event) -
         from sender.hand.xr_hand_sender import _build_packet, _build_null_packet
 
         retargeter = XRDexRetargeter(convention=args.convention, hand_side=args.hand)
+        watchdog = StoreWatchdog(store, timeout_s=args.watchdog_timeout_s)
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         target = (args.target_ip, args.hand_port)
         dt = 1.0 / args.hand_hz
         send_count = 0
+        skip_count = 0
         last_log = time.time()
         buttons_empty = {
             "estop": False, "reset": False, "quit": False,
@@ -94,6 +100,16 @@ def _hand_thread_fn(args, store: BridgePoseStore, stop_event: threading.Event) -
 
         while not stop_event.is_set():
             t_start = time.perf_counter()
+
+            # watchdog: BridgePoseStore stale 이면 송신 skip — receiver.py 의 EMA filter 가
+            # 마지막 valid q20 hold (receiver._recv_loop 가 마지막 valid HandData 만 유지).
+            if not watchdog.fresh():
+                skip_count += 1
+                elapsed = time.perf_counter() - t_start
+                remaining = dt - elapsed
+                if remaining > 0:
+                    time.sleep(remaining)
+                continue
 
             if args.hand == "right":
                 kp_25 = store.right_hand_positions
@@ -117,7 +133,7 @@ def _hand_thread_fn(args, store: BridgePoseStore, stop_event: threading.Event) -
                 state = "TRACK" if pkt["tracking"] else "LOST "
                 q = pkt["joint_angles"]
                 print(
-                    f"[run_xr_teleop:hand] #{send_count:>6d} {state} "
+                    f"[run_xr_teleop:hand] #{send_count:>6d} {state} skip={skip_count} "
                     f"ws_msg={stats['hand_msg_count']} "
                     f"q[5/9/13/17]=[{q[5]:+.2f}/{q[9]:+.2f}/{q[13]:+.2f}/{q[17]:+.2f}]",
                     flush=True,
@@ -165,6 +181,13 @@ def main() -> int:
                         help="BridgePoseStore ws port (default 8013 or env XR_BRIDGE_PORT)")
     parser.add_argument("--no-keyboard", action="store_true",
                         help="termios 비활성 — sshd / headless. 자동 calibrate 시도")
+
+    # safety
+    parser.add_argument("--watchdog-timeout-s", type=float, default=0.2,
+                        help="BridgePoseStore stale 판정 timeout (default 0.2s). "
+                             "msg age 가 이 값 초과 시 sender 송신 skip")
+    parser.add_argument("--no-workspace-clamp", action="store_true",
+                        help="(arm) workspace envelope clamp 비활성. 위험 — 검증 후에만 사용")
 
     args = parser.parse_args()
 
