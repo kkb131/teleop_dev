@@ -97,7 +97,21 @@ python3 -m sender.hand.manus_sender --target-ip 192.168.0.10 --retarget dex --sd
 
 # RealSense sender ([3A] dex_retarget — D405 + MediaPipe + DexPilot)
 python3 -m sender.hand.realsense_sender --target-ip 192.168.0.10 --hand right
+
+# Galaxy XR / Quest 3 통합 sender (팔 + 손 동시)
+python3 -m scripts.run_xr_teleop --target-ip 192.168.0.10 --scale 0.3
 ```
+
+### 1.5b XR (Galaxy XR / Meta Quest 3) 추가 설치
+
+상세 절차: [`docs/xr_input_guide.md`](xr_input_guide.md). 요약:
+
+1. Google 공식 ADB platform-tools 설치 (Ubuntu apt 패키지는 glibc 호환성 문제로 금지)
+2. udev rules + plugdev (Samsung Galaxy XR VID `04e8` / Meta Quest VID `2833`)
+3. `conda env update -f environment.yaml` (또는 `pip install 'aiohttp>=3.8'`)
+4. 헤드셋 USB-C 연결 + `adb reverse tcp:8013 tcp:8013`
+5. `python3 -m scripts.run_xr_teleop --target-ip <ROBOT_PC_IP>`
+6. 헤드셋 Chrome → `http://localhost:8013/` → Enter VR/AR → 손 들이밀기 → 'r' 키
 
 ### 1.6 PYTHONPATH 설정
 

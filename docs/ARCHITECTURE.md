@@ -11,18 +11,20 @@ UR10e 팔 + Tesollo DG5F 손의 원격조종(teleop) 시스템.
 조종 PC (Operator)                         로봇 PC (AGX Orin)
 ┌──────────────────────┐                  ┌───────────────────────────┐
 │  Vive Tracker 3.0    │                  │  UnifiedNetworkInput      │
-│  Keyboard / Xbox  ───┼── UDP 9871 ────→ │    ↓                      │
-│                      │                  │  ExpFilter → Pink IK      │
-│                      │                  │    ↓                      │
-│                      │                  │  Admittance / Impedance   │
-│                      │                  │    ↓                      │
-│                      │                  │  UR10e (servoJ / torque)  │
+│  Keyboard / Xbox     │                  │    ↓                      │
+│  Galaxy XR / Quest 3 ┼── UDP 9871 ────→ │  ExpFilter → Pink IK      │
+│  ┌────────────────┐  │                  │    ↓                      │
+│  │ BridgePoseStore│  │                  │  Admittance / Impedance   │
+│  │ (ws bridge)    │  │                  │    ↓                      │
+│  └────────────────┘  │                  │  UR10e (servoJ / torque)  │
 ├──────────────────────┤                  ├───────────────────────────┤
-│  Manus Gloves     ───┼── UDP 9872 ────→ │  Receiver → Retarget     │
-│                      │                  │    ↓                      │
-│                      │                  │  Tesollo DG5F (Modbus)   │
+│  Manus Gloves        │                  │  Receiver → Retarget     │
+│  RealSense D405      │                  │    ↓                      │
+│  Galaxy XR / Quest 3 ┼── UDP 9872 ────→ │  Tesollo DG5F (Modbus)   │
 └──────────────────────┘                  └───────────────────────────┘
 ```
+
+XR 헤드셋은 USB-C (`adb reverse`) 로 연결, 자체 ws bridge (port 8013) 가 헤드셋 Chrome → 조종 PC pose 송신. 같은 BridgePoseStore singleton 이 팔 (UDP 9871) 과 손 (UDP 9872) sender 양쪽에 데이터 공급.
 
 ---
 
@@ -43,19 +45,30 @@ teleop_dev/
 │   │   ├── calibrate.py               #     SteamVR → base_link 좌표 보정
 │   │   ├── keyboard_sender.py         #     WASDQE 키보드 sender
 │   │   ├── joystick_sender.py         #     Xbox/Logitech 게임패드 sender
+│   │   ├── xr_sender.py               #     Galaxy XR / Quest 3 sender (BridgePoseStore 공유)
+│   │   ├── xr_frame_align.py          #     WebXR wrist → base_link, relative motion + recalibrate
 │   │   ├── monitor.py                 #     UDP 패킷 모니터 (디버깅)
 │   │   ├── move_to_pose.py            #     단일 포즈 전송 유틸리티
 │   │   ├── config/default.yaml        #     기본 설정
 │   │   └── tests/                     #     단계별 테스트 (step1~step6)
-│   └── hand/                          #   손 입력장치 → UDP 9872
-│       ├── manus_reader.py            #     Manus SDK subprocess wrapper
-│       ├── manus_sender.py            #     UDP sender (60Hz)
-│       ├── manus_config.py            #     Manus YAML 설정 로더
-│       ├── calibrate.py               #     손 캘리브레이션
-│       ├── hand_visualizer.py         #     손 관절 시각화
-│       ├── config/default.yaml        #     기본 설정
-│       ├── sdk/                       #     Manus C++ SDK (사전 빌드 .so)
-│       └── tests/                     #     단계별 테스트 (step0~step4)
+│   ├── hand/                          #   손 입력장치 → UDP 9872
+│   │   ├── manus_reader.py            #     Manus SDK subprocess wrapper
+│   │   ├── manus_sender.py            #     UDP sender (60Hz)
+│   │   ├── manus_config.py            #     Manus YAML 설정 로더
+│   │   ├── calibrate.py               #     손 캘리브레이션
+│   │   ├── hand_visualizer.py         #     손 관절 시각화
+│   │   ├── xr_hand_sender.py          #     Galaxy XR / Quest 3 hand sender (DexPilot)
+│   │   ├── xr_dex_retargeter.py       #     WebXR 25-joint → DG-5F 20-vec retarget wrapper
+│   │   ├── xr_remap.py                #     WebXR 25 → wrist-local + palm-aligned MANO frame
+│   │   ├── config/default.yaml        #     기본 설정
+│   │   ├── config_xr/                 #     XR retarget URDF + meshes + DexPilot yml
+│   │   ├── sdk/                       #     Manus C++ SDK (사전 빌드 .so)
+│   │   └── tests/                     #     단계별 테스트 (step0~step4)
+│   └── xr_common/                     #   XR (Galaxy XR / Quest 3) 공통 — arm + hand 가 공유
+│       ├── bridge_pose_store.py       #     aiohttp HTTP+WS server, Singleton (port 8013)
+│       ├── watchdog.py                #     StoreWatchdog (freshness) + WorkspaceLimits (envelope)
+│       ├── config.yaml                #     ws.port / webrtc.enabled / render plane size
+│       └── assets/webxr_to_pose.html  #     headset Chrome WebXR client (자체 JS, 250 lines)
 │
 ├── robot/                             # 로봇 PC (AGX Orin, ROS2 + ur-rtde)
 │   ├── config.py                      #   공유 상수: JOINT_NAMES, URDF_PATH, RTDE_FREQUENCY 등
@@ -103,9 +116,18 @@ teleop_dev/
 │       ├── config/default.yaml        #     기본 설정
 │       └── tests/                     #     Modbus, retarget, E2E 테스트
 │
+├── scripts/                           # entry-point 스크립트
+│   ├── run_xr_teleop.py               #   XR 통합 launcher (arm + hand 동시, BridgePoseStore 공유)
+│   ├── xr_pose_diag.py                #   XR pose-only diagnostic (mean_freq / lost / recovery / jitter)
+│   └── run_tests.sh                   #   기존 unit test 일괄 실행
+│
 ├── docs/                              # 문서
 │   ├── ARCHITECTURE.md                #   이 파일
-│   └── unified_teleop_guide.md        #   전체 시스템 사용 가이드
+│   ├── setup_guide.md                 #   conda env / Docker / 의존성 설치
+│   ├── arm_input_guide.md             #   Vive / keyboard / joystick 사용 가이드
+│   ├── hand_manus_guide.md            #   Manus glove / RealSense 사용 가이드
+│   ├── xr_input_guide.md              #   Galaxy XR / Quest 3 사용 가이드 (XR sender)
+│   └── vr_teleop/                     #   XR 통합 plan + phase 별 spike + test guide
 │
 └── environment.yaml                   # 조종 PC conda 환경
 ```
@@ -180,6 +202,15 @@ python3 -m sender.arm.keyboard_sender --target-ip 10.0.0.5
 
 # Manus 글러브 → 손 teleop
 python3 -m sender.hand.manus_sender --target-ip 10.0.0.5
+
+# Galaxy XR / Quest 3 → 팔 + 손 teleop (통합)
+python3 -m scripts.run_xr_teleop --target-ip 10.0.0.5 --scale 0.3
+
+# Galaxy XR / Quest 3 → 팔만
+python3 -m sender.arm.xr_sender --target-ip 10.0.0.5 --scale 0.3
+
+# Galaxy XR / Quest 3 → 손만
+python3 -m sender.hand.xr_hand_sender --target-ip 10.0.0.5
 ```
 
 ### 로봇 PC (AGX Orin)
@@ -211,6 +242,9 @@ python3 -m robot.hand.receiver --hand-ip 169.254.186.72
 | pynput | 키보드 상태 읽기 |
 | pygame (optional) | 게임패드 입력 |
 | Manus SDK (.so) | 글러브 데이터 읽기 |
+| aiohttp (XR) | Galaxy XR / Quest 3 ws bridge (xr_common) |
+| dex_retargeting (XR / hand) | WebXR 25-joint → DG-5F retargeting |
+| mediapipe / pyrealsense2 / opencv-python | RealSense + MediaPipe HandLandmarker (별도 sender) |
 
 ### 로봇 PC (robot/)
 
