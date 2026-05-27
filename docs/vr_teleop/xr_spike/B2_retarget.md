@@ -57,12 +57,18 @@ Vector type (target=6) fallback 시 `expand_retarget_to_dg5f_20` 가 mimic 0.6/0
 
 ## dex_retargeting 버전 호환성
 
-xr_teleop 코드는 `target_link_human_indices_dexpilot` 명시 인덱스 사용.
-teleop_dev 의 dex_retargeting==0.5.0 은 해당 키 비지원 — 자동 생성 (auto-derive from `finger_tip_link_names`) 만 지원. yml 에서 명시 인덱스 제거하면 동일 결과 (Inspire / BrainCo upstream 패턴과 일치).
+xr_teleop 원본 yml ([xr_teleop/assets/dg5f_hand/dg5f_right.yml:38](../../../../xr_teleop/assets/dg5f_hand/dg5f_right.yml#L38)) 은 `target_link_human_indices_dexpilot` 잘못된 suffix 키 사용. dex_retargeting 의 `RetargetingConfig.from_dict` ([retargeting_config.py:157-160](file:///usr/local/lib/python3.10/dist-packages/dex_retargeting/retargeting_config.py#L157)) 는 정확한 키 이름 `target_link_human_indices` 만 인식 — xr_teleop 의 명시 인덱스 **silently ignored**.
 
-| xr_teleop yml | teleop_dev yml | 결과 |
-|---|---|---|
-| `target_link_human_indices_dexpilot: [[9,14,...],[4,4,...]]` | (제거) | 동일 — auto-generated `[4, 9, 14, 19, 24]` |
+⚠️ **Phase B2 작성 시 잘못된 가정** (Phase B4 ([B4_indices_fix.md](B4_indices_fix.md)) 에서 정정):
+> "yml 에서 명시 인덱스 제거하면 동일 결과 — auto-generated [4, 9, 14, 19, 24]"
+
+실제로는 dex_retargeting 0.5.0 의 [optimizer.py:357-364](file:///usr/local/lib/python3.10/dist-packages/dex_retargeting/optimizer.py#L357) 가 `generate_link_indices * 4` 로 auto-gen → **MANO 21-joint 가정의 [4, 8, 12, 16, 20]** 생성. WebXR 25-joint 의 실제 fingertip [4, 9, 14, 19, 24] 와 mismatch → 사용자 손 펴기/쥐기 인식 실패.
+
+| 항목 | xr_teleop 원본 | teleop_dev (B4 fix) | 결과 |
+|---|---|---|---|
+| yml key | `target_link_human_indices_dexpilot` (silent ignored) | `target_link_human_indices` (인식됨) | ✓ |
+| fingertip indices | (auto-gen [4,8,12,16,20], MANO 가정) | 명시 [4, 9, 14, 19, 24] (WebXR) | 정확 |
+| pinky fingertip target | metacarpal (손가락 base, 거의 안 움직임) | tip (정확) | open/fist 추종 OK |
 
 ## 검증 (단위, 헤드셋 불요)
 
@@ -73,14 +79,18 @@ python3 -m sender.hand.xr_dex_retargeter --selftest
 기대 출력:
 ```
 [XRDexRetargeter] dg5f_right_xr.yml target=20 fixed=0 convention=mediapipe side=right
+[XRDexRetargeter] task fingertip indices = [4, 9, 14, 19, 24] ✓ matches WebXR 25-joint fingertips
 [selftest] init OK: 20 target joints
+[selftest] task fingertip indices = [4, 9, 14, 19, 24] ✓
 [selftest] invalid kp → q20 zeros OK
-[selftest] open hand → q20 shape=(20,), range=[-0.543, 1.572]
-[selftest] fist → q20 range=[-0.556, 1.572]
-[selftest] mean PIP delta (fist - open) = +0.014  (should be positive)
-[selftest] yaw rotation robustness: max(|q - q_rot|) = 0.5217  (should < 0.1)
+[selftest] open hand → q20 shape=(20,), range=[-0.479, 1.048]
+[selftest] fist → q20 range=[-0.482, 0.899]
+[selftest] mean PIP delta (fist - open) = +0.060  (should be positive)
+[selftest] yaw rotation robustness: max(|q - q_rot|) = 0.5212  (should < 0.1)
 [selftest] PASS
 ```
+
+`[selftest] task fingertip indices = [4, 9, 14, 19, 24] ✓` 가 핵심 — yml 의 명시 인덱스 가 RetargetingConfig 에 인식되었음을 확인하는 단언. 누락 시 selftest fail.
 
 ### 주의: synthetic dummy 한계
 
@@ -95,7 +105,8 @@ python3 -m sender.hand.xr_dex_retargeter --selftest
 | 증상 | 원인 | 해결 |
 |---|---|---|
 | `ImportError: cannot import name 'RetargetingConfig' from 'dex_retargeting'` | dex_retargeting 버전 차이 (0.5.0+) | `from dex_retargeting.retargeting_config import RetargetingConfig` 사용 (코드 이미 적용) |
-| `unexpected keyword argument 'target_link_human_indices_dexpilot'` | dex_retargeting 0.5.0 는 명시 인덱스 미지원 | yml 에서 해당 키 제거 (코드 이미 적용) |
+| `unexpected keyword argument 'target_link_human_indices_dexpilot'` | xr_teleop 의 잘못된 suffix 키. dex_retargeting 0.5.0 는 정확한 키 이름 `target_link_human_indices` 만 인식 | yml 에서 suffix 제거 (B4 fix 이미 적용) |
+| **open/fist 손 동작 추종 안 됨** | yml 의 `target_link_human_indices` 누락 → MANO 21-joint 가정 auto-gen ([4,8,12,16,20]) → WebXR 25 와 mismatch | [B4_indices_fix.md](B4_indices_fix.md) 참조 (yml 에 명시 인덱스 추가) |
 | URDF mesh 파일 누락 경고 | `config_xr/meshes/` 누락 | meshes 디렉토리 commit 확인. `git ls-files config_xr/meshes` |
 | `ipopt` 미설치 / 다른 solver 오류 | dex_retargeting nlopt backend 자동 사용 | `pip install dex_retargeting` 시 nlopt 함께 설치됨. python -c "import nlopt" 확인 |
 

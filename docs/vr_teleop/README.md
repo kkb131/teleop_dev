@@ -28,6 +28,7 @@
 | spike: DexPilot retargeter | [xr_spike/B2_retarget.md](xr_spike/B2_retarget.md) |
 | spike: UDP sender | [xr_spike/B3_hand_sender.md](xr_spike/B3_hand_sender.md) |
 | test guide (smoke + DG-5F) | [xr_spike/B3_test_guide.md](xr_spike/B3_test_guide.md) |
+| **fix: auto-generated indices (open/fist 미동작 버그)** | [xr_spike/B4_indices_fix.md](xr_spike/B4_indices_fix.md) |
 | 신규 코드 | `sender/hand/xr_*.py` + `sender/hand/config_xr/` |
 
 ### Phase C — XR 팔 sender (UDP 9871)

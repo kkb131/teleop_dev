@@ -143,6 +143,29 @@ class XRDexRetargeter:
             f"convention={self.convention} side={self.hand_side}"
         )
 
+        # Phase B4 진단: target_link_human_indices 의 fingertip 부분이 WebXR
+        # 25-joint 와 호환되는지 확인. dex_retargeting 0.5.0 의 DexPilot 이
+        # yml 의 명시 인덱스 누락 시 `generate_link_indices * 4` 로 MANO 21-joint
+        # fingertip 인덱스 [4, 8, 12, 16, 20] 을 auto-generate — WebXR 입력
+        # [4, 9, 14, 19, 24] 와 mismatch 면 손가락 추종이 무너짐.
+        if self.target_indices is not None and self.target_indices.ndim == 2:
+            task_tail = np.asarray(self.target_indices[1, -5:]).tolist()
+            webxr_tips = [4, 9, 14, 19, 24]
+            if sorted(set(task_tail)) == webxr_tips:
+                print(
+                    f"[XRDexRetargeter] task fingertip indices = {task_tail} "
+                    f"✓ matches WebXR 25-joint fingertips"
+                )
+            else:
+                print(
+                    f"[XRDexRetargeter] ⚠️  task fingertip indices = {task_tail} "
+                    f"— WebXR 기대값 {webxr_tips} 와 다름.\n"
+                    f"  → yml 의 target_link_human_indices 명시 누락 가능성. "
+                    f"dex_retargeting 0.5.0 의 auto-gen 은 MANO 21-joint 가정 "
+                    f"(* 4) 라 [4, 8, 12, 16, 20] 생성. "
+                    f"yml 의 'target_link_human_indices' 명시 키 확인 (no `_dexpilot` suffix)."
+                )
+
     def retarget(self, kp_25: np.ndarray) -> np.ndarray:
         """WebXR 25-joint → DG-5F 20-vec joint angles.
 
@@ -204,6 +227,19 @@ def _selftest() -> int:
         return 1
 
     print(f"[selftest] init OK: {len(rt.target_joint_names)} target joints")
+
+    # Phase B4: target_link_human_indices 가 WebXR 25-joint 와 호환되는지 단언.
+    # auto-generated MANO 인덱스 [4,8,12,16,20] 이 들어왔으면 retargeter 가 비정상
+    # 동작 — 실 hardware 테스트 전에 미리 잡음.
+    assert rt.target_indices is not None and rt.target_indices.ndim == 2, \
+        f"target_indices shape unexpected: {rt.target_indices}"
+    task_tail = sorted(set(np.asarray(rt.target_indices[1, -5:]).tolist()))
+    assert task_tail == [4, 9, 14, 19, 24], (
+        f"task fingertip indices {task_tail} != WebXR [4, 9, 14, 19, 24]. "
+        f"yml 의 'target_link_human_indices' 키 누락 또는 잘못된 suffix 가능성 "
+        f"(`_dexpilot` 등). docs/vr_teleop/xr_spike/B4_indices_fix.md 참조."
+    )
+    print(f"[selftest] task fingertip indices = {task_tail} ✓")
 
     # invalid kp → last q20 = zeros 반환
     q = rt.retarget(np.zeros((25, 3)))

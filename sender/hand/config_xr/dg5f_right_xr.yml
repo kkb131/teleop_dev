@@ -1,6 +1,6 @@
 # Tesollo DG-5F retargeting config (WebXR 25-joint → 20 DG-5F joint).
 #
-# 출처: xr_teleop/assets/dg5f_hand/dg5f_right.yml — DexPilot 검증 설정 그대로.
+# 출처: xr_teleop/assets/dg5f_hand/dg5f_right.yml — DexPilot 검증 설정 (의도된 값).
 #
 # 주요 결정 (xr_teleop Week 4 U5+ / U5++):
 #   - type: DexPilot (vector 보다 pinch 정확도 우월, retarget_dev/docs/dg5f_tuning.md)
@@ -8,11 +8,18 @@
 #   - scaling_factor: 1.2 (DG-5F 가 사람 손 ~1.2배 큼 → 사람 손 확대해 매칭)
 #   - low_pass_alpha: 0.2 (스무딩, jitter 완화)
 #
-# WebXR 25-joint fingertip 인덱스:
+# ★ Phase B4 (2026-05-19) 진단: dex_retargeting 0.5.0 의 DexPilot 이
+#   target_link_human_indices 명시 누락 시 MANO 21-joint 가정 (`* 4`) 으로
+#   auto-generate — fingertip 을 [4, 8, 12, 16, 20] 으로 잘못 선택. 우리 입력은
+#   WebXR 25-joint 라 fingertip 이 [4, 9, 14, 19, 24]. 명시로 강제 (docs/vr_teleop/xr_spike/B4_indices_fix.md).
+#
+# WebXR 25-joint fingertip 인덱스 (각 finger 5 keypoint: metacarpal/proximal/intermediate/distal/tip):
 #   wrist=0, thumb=4, index=9, middle=14, ring=19, pinky=24
-# DexPilot 의 auto-generated target_link_human_indices = [4, 9, 14, 19, 24] (WebXR
-# 그대로). Inspire / BrainCo upstream 패턴 과 100% 일치 (xr_teleop U5+ 검증).
-# 명시 지정으로 향후 convention toggle (MANO 21 인덱스 시도 등) 시 빠른 변경 용이.
+#
+# 주의: xr_teleop 원본 yml 은 `target_link_human_indices_dexpilot` (잘못된 suffix)
+# 키 사용 — dex_retargeting 의 RetargetingConfig.from_dict 는 정확한 키 이름
+# `target_link_human_indices` 만 인식하므로 silently ignored. 본 파일은 정확한
+# 키 이름 사용.
 
 right:
   type: DexPilot
@@ -28,6 +35,15 @@ right:
     - "rl_dg_3_tip"  # Middle
     - "rl_dg_4_tip"  # Ring
     - "rl_dg_5_tip"  # Pinky
+
+  # WebXR 25-joint 의 (origin, task) pair indices — 명시 필수.
+  #   row 0 (origin): 10 finger-pair-distance origin + 5 wrist-to-tip origin (wrist=0)
+  #   row 1 (task)  : 10 finger-pair-distance task   + 5 wrist-to-tip task   (tip)
+  # 10 pair-distance: (4-9), (4-14), (4-19), (4-24), (9-14), (9-19), (9-24), (14-19), (14-24), (19-24)
+  # 5  wrist-to-tip: (0-4), (0-9), (0-14), (0-19), (0-24)
+  target_link_human_indices:
+    - [ 9, 14, 19, 24, 14, 19, 24, 19, 24, 24,  0,  0,  0,  0,  0]
+    - [ 4,  4,  4,  4,  9,  9,  9, 14, 14, 19,  4,  9, 14, 19, 24]
 
   # 사람 손 ~1.2배 확대 (DG-5F 가 1.2~1.3배 큼)
   scaling_factor: 1.2
