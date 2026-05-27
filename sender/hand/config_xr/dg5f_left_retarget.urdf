@@ -102,7 +102,7 @@
     <parent link="ll_dg_palm" />
     <child link="ll_dg_1_1" />
     <axis xyz="1 0 0" />
-    <limit lower="-0.3839724354387525" upper="0.8901179185171081" effort="7.5" velocity="3.141592653589793"/>
+    <limit lower="-0.8901179185171081" upper="0.3839724354387525" effort="7.5" velocity="3.141592653589793"/>
   </joint>
 
   <link name="ll_dg_1_2">
@@ -129,7 +129,7 @@
     <parent link="ll_dg_1_1" />
     <child link="ll_dg_1_2" />
     <axis xyz="0 0 1" />
-    <limit lower="-3.141592653589793" upper="0.0" effort="7.5" velocity="3.141592653589793"/>
+    <limit lower="-0.0" upper="3.141592653589793" effort="7.5" velocity="3.141592653589793"/>
   </joint>
 
   <link name="ll_dg_1_3">
@@ -235,7 +235,7 @@
     <parent link="ll_dg_palm" />
     <child link="ll_dg_2_1" />
     <axis xyz="1 0 0" />
-    <limit lower="-0.4188790204786391" upper="0.6108652381980153" effort="7.5" velocity="3.141592653589793"/>
+    <limit lower="-0.6108652381980153" upper="0.4188790204786391" effort="7.5" velocity="3.141592653589793"/>
   </joint>
 
   <link name="ll_dg_2_2">
@@ -501,7 +501,7 @@
     <parent link="ll_dg_palm" />
     <child link="ll_dg_4_1" />
     <axis xyz="1 0 0" />
-    <limit lower="-0.4188790204786391" upper="0.6108652381980153" effort="7.5" velocity="3.141592653589793"/>
+    <limit lower="-0.6108652381980153" upper="0.4188790204786391" effort="7.5" velocity="3.141592653589793"/>
   </joint>
 
   <link name="ll_dg_4_2">
@@ -634,7 +634,7 @@
     <parent link="ll_dg_palm" />
     <child link="ll_dg_5_1" />
     <axis xyz="0 0 1" />
-    <limit lower="-0.017453292519943295" upper="1.0471975511965976" effort="7.5" velocity="3.141592653589793"/>
+    <limit lower="-1.0471975511965976" upper="0.017453292519943295" effort="7.5" velocity="3.141592653589793"/>
   </joint>
 
   <link name="ll_dg_5_2">
@@ -661,7 +661,7 @@
     <parent link="ll_dg_5_1" />
     <child link="ll_dg_5_2" />
     <axis xyz="1 0 0" />
-    <limit lower="-0.4188790204786391" upper="0.6108652381980153" effort="7.5" velocity="3.141592653589793"/>
+    <limit lower="-0.6108652381980153" upper="0.4188790204786391" effort="7.5" velocity="3.141592653589793"/>
   </joint>
 
   <link name="ll_dg_5_3">

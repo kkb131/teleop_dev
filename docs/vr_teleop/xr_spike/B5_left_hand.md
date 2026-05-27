@@ -48,36 +48,43 @@ sed 일괄 적용. right URDF 와 같은 상대 경로 패턴 (`./meshes/{visual
 
 손가락 anatomical 굴곡 방향이 left/right 모두 positive 라 `lower=0` 패턴 동일.
 
-**C. (B5 사후 fix) 4 개 single-sign joint limit — right URDF 와 sign 동일하게 변경**.
+**C. (B5 1차 fix 시도 + 사용자 2차 실측으로 revert)**
 
-⚠️ **사용자 1차 실측 (2026-05-27)**: left 의 다른 손가락 (index/middle/ring/pinky) 은 잘 굴곡되는데 **엄지 (thumb) 가 안 굴곡됨** 보고. 진단 결과:
+#### 1차 가설 (오답) — DG-5F hardware sign convention 통일 가정
 
-| 항목 | 결과 |
-|---|---|
-| `dg5f_ros2_client.py` (publisher) | 단순 passthrough, sign 변환 없음 |
-| `dg5f_driver` (`set_position_rad`) | radian → uint16 직접 cast, per-joint sign 없음 |
-| `dg5f_*_pid_all_controller.yaml` | 양쪽 동일 p=1.5, sign 변환 없음 |
-| native `dg5f_left.urdf` 의 `_*_2` MCP flex joint | **양쪽 limit 동일 `[0, 2.0]`** (axis `0 1 0`) |
-| native `dg5f_left.urdf` 의 `_1_2`, `_1_1`, `_5_1`, `_5_2` | left 가 right 와 sign mirror — visualization 전용 |
+`dg5f_ros2_client.py` / `dg5f_driver` / PID config 모두 per-joint sign 변환 없음. native URDF 의 `_*_2` MCP flex 가 양쪽 동일 `[0, 2.0]` 인데 다른 single-sign joint 는 mirror — 일관성 부재. → "hardware 는 좌/우 동일 회전 방향이고 mirror 는 sim 전용" 가설.
 
-→ DG-5F hardware 는 좌/우 **동일 단일 motor unit + 동일 회전 방향 convention**. native dg5f_left.urdf 의 sign mirror 는 sim/RViz visualization 만을 위한 것. 실 hardware 사용 시 retargeter 가 잘못된 sign 으로 motor 명령 → 특히 thumb opp 같은 single-sign joint 에서 motor 가 정반대로 움직임 또는 안 움직임.
+이 가설로 4 개 single-sign joint (`lj_dg_1_1`, `lj_dg_1_2`, `lj_dg_5_1`, `lj_dg_5_2`) 의 limit 를 right 와 sign 동일하게 변경 시도.
 
-`_*_2` MCP flex 가 **양쪽 동일** 이라는 사실이 결정적 증거 — DG-5F URDF author 가 일부 joint 만 mirror 하고 나머지 (단방향만 가능한 joint) 는 hardware convention 그대로 둔 것으로 추정.
+#### 사용자 2차 실측 (2026-05-27) — 1차 fix 반박
 
-**fix**: 4 개 joint limit 를 right 와 sign 동일하게:
+- **새끼손가락**: revert 전 (native mirror) 이 더 맞게 움직임 → mirror sign 이 hardware 와 정확히 일치.
+- **엄지**: 1차 fix 후 더 안 움직임 (이전엔 조금이라도 움직였음) → limit 변경이 thumb 문제와 무관.
 
-| joint | left native (잘못, sim 전용) | left retarget (B5 fix) | right (reference) |
-|---|---|---|---|
-| `lj_dg_1_1` (thumb abd) | `[-0.89, 0.38]` | `[-0.38, 0.89]` | `[-0.38, 0.89]` |
-| **`lj_dg_1_2` (thumb opp)** | **`[0, π]`** | **`[-π, 0]`** | `[-π, 0]` |
-| `lj_dg_5_1` (pinky abd) | `[-1.05, 0.02]` | `[-0.02, 1.05]` | `[-0.02, 1.05]` |
-| `lj_dg_5_2` (pinky flex) | `[-0.61, 0.42]` | `[-0.42, 0.61]` | `[-0.42, 0.61]` |
+→ **1차 가설 오답**. DG-5F left hardware 는 진짜 mirror motor 회전 방향. native URDF 의 `[0, π]` (thumb opp positive 방향) 가 hardware 와 일치.
 
-⭐ `lj_dg_1_2` 는 single-sign (negative-only) joint — retargeter 가 limit 안에서만 풀이하므로 limit 가 잘못된 부호로 설정되면 motor 가 반대 방향으로만 출력 → 사용자 thumb 미동작 증상 직접 원인.
+#### B5 final state — 4 개 limit 모두 native (mirror) 그대로
 
-다른 abduction joint (`_1_1`, `_5_1`, `_5_2`) 들은 양방향 range 라 retargeter 가 두 방향 모두 시도 가능, 사용자가 thumb 만큼 명확한 증상 보지 못 했을 수 있음 — 그래도 정확성 위해 일괄 fix.
+수정 안 함. native dg5f_left.urdf 의 limit 값 그대로 dg5f_left_retarget.urdf 에 보존. PIP/DIP `lower=0` 변경만 적용 (위 B 단계).
 
-**불변**: `_*_2` MCP flex (index/middle/ring/pinky 4 joint) 는 native 가 이미 양쪽 동일 `[0, 2.0]` 이라 fix 불요.
+#### Thumb 미동작은 별도 진단 필요 (B5 미해결)
+
+엄지 (lj_dg_1_2) 가 잘 안 굽힘 — limit 와 무관한 다른 원인. **가장 가능성 높은 가설**:
+
+1. **`MEDIAPIPE_OPERATOR2MANO_LEFT` 매트릭스 검증 부족** ([`mano_transform.py:95-97`](../../../sender/hand/core/mano_transform.py#L95) 에 이미 "WARNING: not yet hardware-verified on a left-hand DG-5F" 명시).
+   - matrix: row 1 (Y sign flip) + row 2 (Z sign flip) 차이만으로 right 에서 유추된 값.
+   - WebXR HandLandmarker 의 left chirality 가 정말 이 matrix 와 맞는지 미검증.
+
+2. **`convention="manus"` toggle 시도 권장**:
+   - `MANUS_OPERATOR2MANO_LEFT` 는 row 1 sign flip 만 (mediapipe LEFT 와 차이) — WebXR 의 left chirality 가 manus 와 같을 가능성.
+   - 시도: `python3 -m sender.hand.xr_hand_sender --hand left --convention manus`
+   - thumb 가 잡히면 사용자 hardware 는 manus convention.
+
+3. **추가 진단 (사용자가 thumb 만 inverse 한 경우)**:
+   - `estimate_wrist_frame_webxr` 의 disambiguation step (z 가 pinky → index 방향) 이 left 손에서 same logic 인데, left 손은 mirror geometry 라 pinky / index 의 상대 위치가 다름 — disambiguation 부정확 가능성.
+   - 진단 도구: `python3 -m scripts.xr_pose_diag --measure 5` 로 left wrist pose 변환 결과 vs right 비교.
+
+**핵심 메시지**: B5 의 코드/yml/URDF 변경은 left 의 **4 손가락 (index/middle/ring/pinky) 동작** 까지만 검증. 엄지는 추가 별도 fix 필요 (B6 또는 후속 spike).
 
 ### 2. 신규 자료: `sender/hand/config_xr/meshes/{visual,collision}/ll_dg_*`
 
@@ -233,7 +240,7 @@ DEFAULT_YML_PATH 변경 (`dg5f_right_xr.yml` → `dg5f_xr.yml`) 에도 right E2E
 | `selftest --hand left` init FAIL: `yml has no 'left' key` | yml rename / left block 누락 | `git status` 로 `dg5f_xr.yml` 존재 확인. yml 안에 `right:` + `left:` 둘 다 있는지 확인 |
 | URDF 로드 실패 — mesh 파일 못 찾음 | `dg5f_left_retarget.urdf` 의 mesh path 가 `package://` 잔존 | `grep package:// dg5f_left_retarget.urdf` 로 0 회 확인. sed 재실행 |
 | `lj_dg_*_3` 또는 `lj_dg_*_4` 가 음수로 풀이 | PIP/DIP `lower=0` 미적용 | `grep 'lower="-1.5707963267948966"' dg5f_left_retarget.urdf` 로 잔존 limit 확인. sed 재실행 |
-| **엄지가 안 굽혀짐 (다른 손가락 OK)** | `lj_dg_1_2` limit 가 native `[0, π]` 그대로 — DG-5F hardware 는 좌/우 동일 회전 convention 이라 mirror 부호가 hardware 와 불일치 | B5 의 §1.C fix 적용 — `lj_dg_1_2` limit `[-π, 0]` 로 변경 (right 와 동일). 다른 3 개 (`lj_dg_1_1`, `lj_dg_5_1`, `lj_dg_5_2`) 도 일괄 fix |
+| **엄지가 안 굽혀짐 (다른 손가락 OK)** | B5 미해결 — limit 가 아니라 `MEDIAPIPE_OPERATOR2MANO_LEFT` 매트릭스 / convention 차원 의심 ([mano_transform.py:95-97](../../../sender/hand/core/mano_transform.py#L95) 의 "not yet hardware-verified" 경고) | (1) `--convention manus` toggle 시도 (2) 안 되면 별도 진단 (B6) |
 | 헤드셋 왼손 안 잡힘 (`hands=0` log) | hand tracking 의 left 활성 안 됨 | 왼손을 시야 안에 충분히 들이밀기. WebXR `handedness: "left"` 자동 인식 |
 | 좌우 헤드셋 손이 바뀜 (오른손 들이밀어도 left DG-5F 움직임) | WebXR HandLandmarker 의 handedness 가 mirror 이미지에선 반대일 수 있음 | 헤드셋 자체 inputsourceschange 디버그 — `[run_xr_teleop:hand] ws_msg=...` log 의 `handedness` 필드 확인 |
 | left DG-5F 의 thumb 만 inverse | thumb opp 의 sign convention (right 는 `[-π, 0]`, left 는 `[0, π]`) | URDF 가 native 라 이미 처리됨. retargeter 가 알아서 양쪽 풀이 |
