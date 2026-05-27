@@ -62,6 +62,10 @@ teleop_dev/
 │   │   ├── xr_remap.py                #     WebXR 25 → wrist-local + palm-aligned MANO frame
 │   │   ├── config/default.yaml        #     기본 설정
 │   │   ├── config_xr/                 #     XR retarget URDF + meshes + DexPilot yml
+│   │   │   ├── dg5f_xr.yml            #       right + left DexPilot config (B5)
+│   │   │   ├── dg5f_right_retarget.urdf   #   right URDF (PIP/DIP lower=0)
+│   │   │   ├── dg5f_left_retarget.urdf    #   left URDF (PIP/DIP lower=0, B5)
+│   │   │   └── meshes/{visual,collision}/ #   rl_dg_* + ll_dg_* (56 + 56 files)
 │   │   ├── sdk/                       #     Manus C++ SDK (사전 빌드 .so)
 │   │   └── tests/                     #     단계별 테스트 (step0~step4)
 │   └── xr_common/                     #   XR (Galaxy XR / Quest 3) 공통 — arm + hand 가 공유

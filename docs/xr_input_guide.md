@@ -202,6 +202,10 @@ python3 -m scripts.run_xr_teleop --target-ip 192.168.0.10 --no-arm
 # 팔만
 python3 -m scripts.run_xr_teleop --target-ip 192.168.0.10 --no-hand
 
+# Left hand (B5, 검증 완료)
+python3 -m scripts.run_xr_teleop --target-ip 192.168.0.10 --hand left
+# robot PC 측: receiver --hand left + dg5f_left_pid_all_controller.launch.py
+
 # 정상속 (검증 후)
 python3 -m scripts.run_xr_teleop --target-ip 192.168.0.10 --scale 1.0
 

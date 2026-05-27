@@ -176,10 +176,14 @@ python3 -m sender.hand.xr_hand_sender --target-ip <ROBOT_PC_IP> --convention man
 
 WebXR HandLandmarker 의 chirality 가 MediaPipe 와 다를 때 (row 1 sign flip). 본 indices fix 와 독립적인 별도 문제.
 
+## Left hand 도 같은 fix 적용 (Phase B5)
+
+본 B4 의 명시 인덱스 fix 는 hand_side 와 무관 — WebXR human keypoint 인덱싱은 left/right 동일. Phase B5 ([B5_left_hand.md](B5_left_hand.md)) 에서 yml 의 `left:` block 도 같은 `target_link_human_indices` 블록을 명시. selftest 가 `--hand left` 옵션으로 left URDF + indices 정확성 둘 다 검증.
+
 ## 영향 받는 파일
 
 수정:
-- `src/teleop_dev/sender/hand/config_xr/dg5f_right_xr.yml` — 명시 인덱스 블록 추가 + 주석 정정
+- `src/teleop_dev/sender/hand/config_xr/dg5f_xr.yml` (Phase B5 에서 `dg5f_right_xr.yml` 에서 rename) — 명시 인덱스 블록 추가 + 주석 정정
 - `src/teleop_dev/sender/hand/xr_dex_retargeter.py` — init 진단 + selftest assert
 - `src/teleop_dev/docs/vr_teleop/xr_spike/B2_retarget.md` — Phase B2 의 잘못된 claim 정정
 

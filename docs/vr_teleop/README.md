@@ -29,7 +29,8 @@
 | spike: UDP sender | [xr_spike/B3_hand_sender.md](xr_spike/B3_hand_sender.md) |
 | test guide (smoke + DG-5F) | [xr_spike/B3_test_guide.md](xr_spike/B3_test_guide.md) |
 | **fix: auto-generated indices (open/fist 미동작 버그)** | [xr_spike/B4_indices_fix.md](xr_spike/B4_indices_fix.md) |
-| 신규 코드 | `sender/hand/xr_*.py` + `sender/hand/config_xr/` |
+| **add: DG-5F left hand 지원 + dg5f_xr.yml rename + selftest --hand** | [xr_spike/B5_left_hand.md](xr_spike/B5_left_hand.md) |
+| 신규 코드 | `sender/hand/xr_*.py` + `sender/hand/config_xr/` (dg5f_xr.yml, right/left URDF, ll_dg_* meshes) |
 
 ### Phase C — XR 팔 sender (UDP 9871)
 

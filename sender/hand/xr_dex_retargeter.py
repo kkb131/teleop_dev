@@ -39,9 +39,9 @@ from sender.hand.xr_remap import webxr_to_wrist_local_mano, is_kp25_valid
 
 DG5F_NUM_MOTORS = 20
 
-# 본 파일 위치 기준 default config
+# 본 파일 위치 기준 default config. yml 한 파일 안에 right + left 두 block.
 _DEFAULT_CONFIG_DIR = Path(__file__).resolve().parent / "config_xr"
-DEFAULT_YML_PATH = _DEFAULT_CONFIG_DIR / "dg5f_right_xr.yml"
+DEFAULT_YML_PATH = _DEFAULT_CONFIG_DIR / "dg5f_xr.yml"
 DEFAULT_ASSETS_DIR = _DEFAULT_CONFIG_DIR
 
 
@@ -213,15 +213,15 @@ class XRDexRetargeter:
 
 
 # ── self-test (sim/headset 불요) ────────────────────────────────────────
-def _selftest() -> int:
-    """python -m sender.hand.xr_dex_retargeter --selftest
+def _selftest(hand_side: str = "right") -> int:
+    """python -m sender.hand.xr_dex_retargeter --selftest [--hand right|left]
 
     URDF 로딩 + dummy kp 로 retarget 호출 + 출력 shape / range 확인.
+    Phase B5: hand_side 파라미터로 right + left 양쪽 검증 가능.
     """
-    import sys
-
+    print(f"[selftest] hand_side={hand_side}")
     try:
-        rt = XRDexRetargeter()
+        rt = XRDexRetargeter(hand_side=hand_side)
     except Exception as e:
         print(f"[selftest] init FAIL: {e}")
         return 1
@@ -294,7 +294,16 @@ def _selftest() -> int:
 
 
 if __name__ == "__main__":
+    import argparse
     import sys
-    if "--selftest" in sys.argv:
-        sys.exit(_selftest())
-    print("Usage: python -m sender.hand.xr_dex_retargeter --selftest")
+
+    parser = argparse.ArgumentParser(description="XR DexPilot retargeter")
+    parser.add_argument("--selftest", action="store_true",
+                        help="URDF 로드 + dummy kp retarget 호출 + indices 검증")
+    parser.add_argument("--hand", default="right", choices=["right", "left"],
+                        help="selftest 의 hand_side (default: right)")
+    args = parser.parse_args()
+
+    if args.selftest:
+        sys.exit(_selftest(hand_side=args.hand))
+    print("Usage: python -m sender.hand.xr_dex_retargeter --selftest [--hand right|left]")

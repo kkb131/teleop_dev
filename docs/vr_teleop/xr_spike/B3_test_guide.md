@@ -128,6 +128,7 @@ python3 -m sender.hand.xr_hand_sender --target-ip 127.0.0.1
 
 ### 3-3. 실 DG-5F (선택, 사용자가 sub network 접근 가능 시)
 
+**Right hand** (Phase B4 fix 후 검증 완료):
 ```bash
 # Terminal 1: dg5f_driver PID controller (별도 PC 또는 같은 PC)
 ros2 launch dg5f_driver dg5f_right_pid_all_controller.launch.py delto_ip:=169.254.186.72
@@ -140,7 +141,25 @@ python3 -m robot.hand.receiver --hand right
 python3 -m sender.hand.xr_hand_sender --target-ip 127.0.0.1
 ```
 
-DG-5F 손가락이 헤드셋 손동작을 따라가는지 시각 확인.
+**Left hand** (Phase B5 신규):
+```bash
+# Terminal 1: dg5f_driver PID controller — left launch
+ros2 launch dg5f_driver dg5f_left_pid_all_controller.launch.py delto_ip:=<LEFT_DG5F_IP>
+
+# Terminal 2: receiver real mode — --hand left
+python3 -m robot.hand.receiver --hand left
+# → "[ROS2] DG5FROS2Client initialized (left hand, mode=real, topic=...)"
+
+# Terminal 3: xr_hand_sender — --hand left
+python3 -m sender.hand.xr_hand_sender --target-ip 127.0.0.1 --hand left
+```
+
+DG-5F 손가락이 헤드셋 (right 시 오른손 / left 시 **왼손**) 동작을 따라가는지 시각 확인.
+
+⚠️ left 검증 시:
+- 헤드셋에서 **왼손** 들이밀어야 함 (BridgePoseStore 의 `left_hand_positions` 가 채워짐)
+- WebXR HandLandmarker 가 `handedness: "left"` 자동 인식 → packet 에 `"hand": "left"` 송신
+- 처음 fist↔spread 가 시각적으로 반대로 보이면 `--convention manus` toggle 시도 ([mano_transform.py:95-97](../../../sender/hand/core/mano_transform.py#L95) 의 left convention 하드웨어 검증 기회).
 
 ## Gate B 통과 조건
 

@@ -1,10 +1,11 @@
-# Tesollo DG-5F retargeting config (WebXR 25-joint → 20 DG-5F joint).
+# Tesollo DG-5F retargeting config (WebXR 25-joint → 20 DG-5F joint), right + left.
 #
 # 출처: xr_teleop/assets/dg5f_hand/dg5f_right.yml — DexPilot 검증 설정 (의도된 값).
+# Phase B5 (2026-05-19) 에서 left block 추가 + 파일명 dg5f_right_xr.yml → dg5f_xr.yml 리네임.
 #
 # 주요 결정 (xr_teleop Week 4 U5+ / U5++):
 #   - type: DexPilot (vector 보다 pinch 정확도 우월, retarget_dev/docs/dg5f_tuning.md)
-#   - urdf: dg5f_right_retarget.urdf (PIP/DIP lower=0 으로 음수 영역 제거, fist 형 lock 회피)
+#   - urdf: dg5f_{right,left}_retarget.urdf (PIP/DIP lower=0 으로 음수 영역 제거)
 #   - scaling_factor: 1.2 (DG-5F 가 사람 손 ~1.2배 큼 → 사람 손 확대해 매칭)
 #   - low_pass_alpha: 0.2 (스무딩, jitter 완화)
 #
@@ -20,6 +21,13 @@
 # 키 사용 — dex_retargeting 의 RetargetingConfig.from_dict 는 정확한 키 이름
 # `target_link_human_indices` 만 인식하므로 silently ignored. 본 파일은 정확한
 # 키 이름 사용.
+#
+# right / left 차이:
+#   - urdf_path: dg5f_{right,left}_retarget.urdf
+#   - wrist_link_name: {rl,ll}_dg_palm
+#   - finger_tip_link_names: {rl,ll}_dg_*_tip
+#   - target_link_human_indices: 동일 (WebXR human keypoint 기준이라 hand_side 무관)
+#   - scaling_factor / low_pass_alpha: 동일
 
 right:
   type: DexPilot
@@ -48,4 +56,26 @@ right:
   # 사람 손 ~1.2배 확대 (DG-5F 가 1.2~1.3배 큼)
   scaling_factor: 1.2
   # 작을수록 smooth, latency ↑
+  low_pass_alpha: 0.2
+
+left:
+  type: DexPilot
+  urdf_path: dg5f_left_retarget.urdf
+
+  # DexPilot 필수: wrist + 5 fingertip link (left prefix ll_dg_*)
+  wrist_link_name: "ll_dg_palm"
+  finger_tip_link_names:
+    - "ll_dg_1_tip"  # Thumb
+    - "ll_dg_2_tip"  # Index
+    - "ll_dg_3_tip"  # Middle
+    - "ll_dg_4_tip"  # Ring
+    - "ll_dg_5_tip"  # Pinky
+
+  # WebXR 25-joint indices — hand_side 무관 (WebXR human keypoint 인덱싱 기준).
+  # right 와 완전 동일. xr_remap 의 MEDIAPIPE_OPERATOR2MANO_LEFT 가 chirality 차이 흡수.
+  target_link_human_indices:
+    - [ 9, 14, 19, 24, 14, 19, 24, 19, 24, 24,  0,  0,  0,  0,  0]
+    - [ 4,  4,  4,  4,  9,  9,  9, 14, 14, 19,  4,  9, 14, 19, 24]
+
+  scaling_factor: 1.2
   low_pass_alpha: 0.2
