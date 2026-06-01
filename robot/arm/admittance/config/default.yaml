@@ -7,20 +7,10 @@ control:
   frequency_rtde: 125        # Hz (rtde mode, matches servoJ)
 
 input:
-  type: "keyboard"           # "keyboard", "xbox", or "network"
-  cartesian_step: 0.01       # m per key press (at 1x speed)
-  rotation_step: 0.05        # rad per key press (at 1x speed)
-  xbox_linear_scale: 0.03    # Xbox stick -> linear velocity scale
-  xbox_angular_scale: 0.08   # Xbox stick -> angular velocity scale
-  network_port: 9870         # UDP port for network joystick (use with joystick_sender.py)
-  network_linear_scale: 0.005   # Network joystick linear scale (lower than xbox, continuous input)
-  network_angular_scale: 0.015  # Network joystick angular scale
-  # Vive Tracker input (use with vive_sender.py)
-  vive_port: 9871               # UDP port for Vive tracker
-  vive_linear_scale: 1.0        # Tracker m/s → command m/s
-  vive_angular_scale: 1.0       # Tracker rad/s → command rad/s
-  vive_deadzone: 0.002          # Velocity deadzone (m/s & rad/s)
-  vive_calibration_file: null   # Calibration JSON (null = default axis mapping)
+  type: "keyboard"           # "keyboard" or "unified"
+  cartesian_step: 0.01       # m per key press (keyboard mode)
+  rotation_step: 0.05        # rad per key press (keyboard mode)
+  unified_port: 9871         # UDP port (unified mode — matches TeleopPosePacket / sender_base default)
 
 filter:
   alpha_position: 0.55       # soft teleop: smoother motion
@@ -50,3 +40,13 @@ admittance:
   force_deadzone: [3.0, 3.0, 3.0, 0.3, 0.3, 0.3]  # N / Nm
   force_saturation: 100.0          # N (reset admittance if exceeded)
   torque_saturation: 10.0          # Nm
+
+initial_pose:
+  # Move to a configured joint pose on startup, before the control loop begins.
+  # The script ramps from the current pose to joint_values over move_duration_s
+  # (joint-space linear interpolation). After reach, the admittance loop starts
+  # from this pose. Override at runtime with --init-move / --no-init-move.
+  enabled: true                  # move on startup (false = keep current sim spawn / robot pose)
+  joint_values:                  # UR10e 6 joint angles (rad): shoulder_pan ... wrist_3
+    [2.24, -1.2808, 2.16, -0.8848, 2.24, 0.0]   # = robot.config.HOME_JOINTS
+  move_duration_s: 3.0           # 보수적 default — safety.max_joint_vel 0.5 rad/s 와 호환

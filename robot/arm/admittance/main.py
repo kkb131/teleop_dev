@@ -217,6 +217,45 @@ class TeleopController:
         sys.stdout.write(output)
         sys.stdout.flush()
 
+    def _move_to_initial_pose(self):
+        """Joint-space linear interpolation from current pose to configured init pose.
+
+        Runs before the admittance control loop starts. Uses backend.send_joint_command
+        at the configured control frequency, so both sim (ROS2 JointTrajectory) and
+        rtde (servoJ) backends work via the same interface.
+
+        No-op if initial_pose.enabled is False, target shape is wrong, or robot is
+        already at target (within 1e-3 rad on every joint).
+        """
+        cfg_ip = self.config.initial_pose
+        if not cfg_ip.enabled:
+            print("[Teleop] initial_pose.enabled=False, skip init move")
+            return
+        target = np.array(cfg_ip.joint_values, dtype=np.float64)
+        if target.shape != (6,):
+            print(f"[Teleop] WARN: initial_pose.joint_values shape {target.shape} "
+                  f"!= (6,), skip init move")
+            return
+        start = np.array(self.backend.get_joint_positions(), dtype=np.float64)
+        if np.allclose(start, target, atol=1e-3):
+            print("[Teleop] Already at initial pose, skip init move")
+            return
+        duration = max(0.1, float(cfg_ip.move_duration_s))
+        dt = 1.0 / self.config.frequency
+        steps = max(1, int(duration / dt))
+        print(f"[Teleop] Moving to initial pose ({duration:.1f}s, {steps} steps): "
+              f"{[f'{v:+.3f}' for v in target]}")
+        for i in range(1, steps + 1):
+            alpha = i / steps
+            q = (1.0 - alpha) * start + alpha * target
+            self.backend.send_joint_command(q.tolist())
+            time.sleep(dt)
+        # Final settle frame
+        self.backend.send_joint_command(target.tolist())
+        time.sleep(dt)
+        self.q_current = target.copy()
+        print("[Teleop] Initial pose reached")
+
     def _log_step(self, ee_vel: float, safety_status: str):
         """Write one row to CSV log."""
         if self._log_writer is None:
@@ -267,6 +306,9 @@ class TeleopController:
                 time.sleep(0.1)
 
             self.q_current = np.array(self.backend.get_joint_positions())
+
+            # Move to configured initial pose (if enabled). Updates self.q_current.
+            self._move_to_initial_pose()
 
             # Initialize modules
             self.ik.initialize(self.q_current)
@@ -449,6 +491,15 @@ def main():
                         help="Path to YAML config file")
     parser.add_argument("--log", action="store_true",
                         help="Enable CSV logging")
+    init_group = parser.add_mutually_exclusive_group()
+    init_group.add_argument("--init-move", dest="init_move",
+                            action="store_true", default=None,
+                            help="Force move to initial pose at startup "
+                                 "(overrides initial_pose.enabled in yaml).")
+    init_group.add_argument("--no-init-move", dest="init_move",
+                            action="store_false", default=None,
+                            help="Skip move to initial pose at startup "
+                                 "(overrides initial_pose.enabled in yaml).")
     args = parser.parse_args()
 
     # Load config
@@ -461,6 +512,8 @@ def main():
         config.input.type = args.input
     if args.robot_ip:
         config.robot.ip = args.robot_ip
+    if args.init_move is not None:
+        config.initial_pose.enabled = args.init_move
 
     # Log path
     log_path = None

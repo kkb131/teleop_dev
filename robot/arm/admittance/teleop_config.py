@@ -6,7 +6,7 @@ from typing import List, Optional
 
 import yaml
 
-from robot.config import URDF_PATH, JOINT_NAMES, DEFAULT_ROBOT_IP
+from robot.config import URDF_PATH, JOINT_NAMES, DEFAULT_ROBOT_IP, HOME_JOINTS
 
 
 _DEFAULT_CONFIG = Path(__file__).parent / "config" / "default.yaml"
@@ -84,6 +84,13 @@ class AdmittanceConfig:
 
 
 @dataclass
+class InitialPoseConfig:
+    enabled: bool = True
+    joint_values: List[float] = field(default_factory=lambda: list(HOME_JOINTS))
+    move_duration_s: float = 3.0
+
+
+@dataclass
 class TeleopConfig:
     robot: RobotConfig = field(default_factory=RobotConfig)
     control: ControlConfig = field(default_factory=ControlConfig)
@@ -92,6 +99,7 @@ class TeleopConfig:
     ik: IKConfig = field(default_factory=IKConfig)
     safety: SafetyConfig = field(default_factory=SafetyConfig)
     admittance: AdmittanceConfig = field(default_factory=AdmittanceConfig)
+    initial_pose: InitialPoseConfig = field(default_factory=InitialPoseConfig)
 
     # From robot.config (read-only)
     urdf_path: str = URDF_PATH
@@ -135,5 +143,7 @@ class TeleopConfig:
             cfg.safety = SafetyConfig(workspace=ws, **sd)
         if "admittance" in data:
             cfg.admittance = AdmittanceConfig(**data["admittance"])
+        if "initial_pose" in data:
+            cfg.initial_pose = InitialPoseConfig(**data["initial_pose"])
 
         return cfg
