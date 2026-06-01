@@ -28,9 +28,9 @@ safety:
   max_joint_vel: 0.5         # rad/s (teleop-specific, conservative)
   max_ee_velocity: 0.1       # m/s
   workspace:
-    x: [-0.8, 0.8]           # meters from base_link
-    y: [-0.8, 0.8]
-    z: [0.05, 1.2]
+    x: [-5.8, 5.8]           # meters from base_link
+    y: [-5.8, 5.8]
+    z: [0.05, 2.2]
 
 admittance:
   enabled_by_default: true         # Always ON (cycle preset with B button)

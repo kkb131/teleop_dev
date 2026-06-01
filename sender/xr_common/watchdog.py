@@ -32,12 +32,16 @@ class WorkspaceLimits:
     UR10e 의 reach 가 ~1.3m 이지만 책상 / 충돌 회피용 보수적 default.
     sender 측에서 target_pos 를 이 envelope 안으로 clamp.
     """
-    x_min: float = -0.7
-    x_max: float =  0.7
-    y_min: float = -0.7
-    y_max: float =  0.0       # robot 뒤로 안 가도록
+    # 좌우 대칭 envelope. 이전에 y_max=0.0 (robot 뒤로 안 가도록) 로 두었더니
+    # init pose [2.24, ...] 의 EE y 가 양수 영역이라 target_pos[1] 이 매번 0 으로
+    # clamp 되어 사용자 손의 y(좌우) 이동이 robot 으로 전달되지 못하는 버그 발생.
+    # robot 의 작업 영역이 정면 한쪽에만 있다고 가정하기보다는 대칭 권장.
+    x_min: float = -3.7
+    x_max: float =  3.7
+    y_min: float = -3.7
+    y_max: float =  3.7
     z_min: float =  0.05      # 책상 평면 위
-    z_max: float =  0.8
+    z_max: float =  3.8
 
     def clamp(self, pos: np.ndarray) -> Tuple[np.ndarray, bool]:
         """pos 를 envelope 안으로 clamp. (clamped, was_clamped) 반환."""

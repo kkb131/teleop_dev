@@ -6,7 +6,7 @@ from typing import List, Optional
 
 import yaml
 
-from robot.config import URDF_PATH, JOINT_NAMES, DEFAULT_ROBOT_IP
+from robot.config import URDF_PATH, JOINT_NAMES, DEFAULT_ROBOT_IP, HOME_JOINTS
 
 
 _DEFAULT_CONFIG = Path(__file__).parent / "config" / "default.yaml"
@@ -83,6 +83,13 @@ class ImpedanceControlConfig:
 
 
 @dataclass
+class InitialPoseConfig:
+    enabled: bool = True
+    joint_values: List[float] = field(default_factory=lambda: list(HOME_JOINTS))
+    move_duration_s: float = 3.0
+
+
+@dataclass
 class ImpedanceConfig:
     robot: RobotConfig = field(default_factory=RobotConfig)
     control: ControlConfig = field(default_factory=ControlConfig)
@@ -91,6 +98,7 @@ class ImpedanceConfig:
     ik: IKConfig = field(default_factory=IKConfig)
     safety: SafetyConfig = field(default_factory=SafetyConfig)
     impedance: ImpedanceControlConfig = field(default_factory=ImpedanceControlConfig)
+    initial_pose: InitialPoseConfig = field(default_factory=InitialPoseConfig)
 
     # From robot.config (read-only)
     urdf_path: str = URDF_PATH
@@ -134,5 +142,7 @@ class ImpedanceConfig:
             cfg.safety = SafetyConfig(workspace=ws, **sd)
         if "impedance" in data:
             cfg.impedance = ImpedanceControlConfig(**data["impedance"])
+        if "initial_pose" in data:
+            cfg.initial_pose = InitialPoseConfig(**data["initial_pose"])
 
         return cfg

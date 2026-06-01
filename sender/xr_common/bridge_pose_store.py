@@ -451,6 +451,37 @@ class BridgePoseStore:
         """noop. 영상 통합은 향후 WebRTC 추가 시 활성."""
         return
 
+    def clear_state(self) -> None:
+        """Zero shared pose arrays + reset msg stats.
+
+        Use case: sender 프로세스 재시작 직후 호출. 새 process 에서는 shared
+        array 가 자연스럽게 zeros 로 할당되지만 (singleton 도 process-local),
+        같은 process 내에서 다회 init / 헤드셋 페이지 reload 사이 stale data 차단을
+        위해 명시적 reset 제공. 헤드셋 ws 재연결 후 첫 frame 이 들어오기 전까지의
+        time window 에서 stale pose 가 origin 으로 잡히는 사고 방지.
+        """
+        with self.head_pose_shared.get_lock():
+            for i in range(16):
+                self.head_pose_shared[i] = 0.0
+        with self.left_arm_pose_shared.get_lock():
+            for i in range(16):
+                self.left_arm_pose_shared[i] = 0.0
+        with self.right_arm_pose_shared.get_lock():
+            for i in range(16):
+                self.right_arm_pose_shared[i] = 0.0
+        if self.use_hand_tracking:
+            with self.left_hand_position_shared.get_lock():
+                for i in range(75):
+                    self.left_hand_position_shared[i] = 0.0
+            with self.right_hand_position_shared.get_lock():
+                for i in range(75):
+                    self.right_hand_position_shared[i] = 0.0
+        with self._stats_lock:
+            self._msg_count = 0
+            self._head_msg_count = 0
+            self._hand_msg_count = 0
+            self._last_msg_time = 0.0
+
     def close(self) -> None:
         """daemon thread 라 main 종료 시 자동 cleanup."""
         return

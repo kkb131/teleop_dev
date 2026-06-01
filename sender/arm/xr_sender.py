@@ -101,6 +101,11 @@ class XRArmSender(TeleopSenderBase):
 
         # BridgePoseStore singleton — Phase B sender 와 같은 instance 공유 가능
         self._store = BridgePoseStore(use_hand_tracking=True, port=bridge_port)
+        # 프로세스 재시작 + 헤드셋 ws 자동 reconnect 시나리오에서 이전 session 의
+        # 마지막 pose 가 shared array 에 남아있을 수 있는 corner-case 차단.
+        # 새 'r' 호출 시 freshness check (calibrate_now) 와 함께 stale origin
+        # 캡처 방지.
+        self._store.clear_state()
         print(f"[XRArmSender] BridgePoseStore ready: http://localhost:{self._store.port}/")
 
         self._aligner = XRRelativeFrameAligner(scale=scale)
@@ -111,6 +116,9 @@ class XRArmSender(TeleopSenderBase):
         self._started = False     # 'r' 키 누르기 전에는 robot origin 만 유지
         self._paused = False
         self._old_settings = None
+        # 새 process 시작 시각 — 'r' calibrate 호출 시 BridgePoseStore msg 가
+        # 이 시각 이후의 fresh msg 인지 확인하여 stale data 로 origin 잡히는 사고 방지.
+        self._sender_start_time = time.perf_counter()
 
         # speed scale (sender_base 의 _get_speed_label 호환)
         self._speed_idx = 1
@@ -263,15 +271,40 @@ class XRArmSender(TeleopSenderBase):
         return result
 
     def _calibrate_now(self, label: str = "") -> None:
-        """user origin + robot origin (query_pose 응답) 동시 캡처."""
-        # 1) robot 의 현재 TCP pose 재조회 (sender_base.query_initial_pose 그대로)
+        """user origin + robot origin (query_pose 응답) 동시 캡처.
+
+        Stale data 차단: BridgePoseStore 의 last_msg_time 이 sender_start_time
+        이후의 fresh msg 인지 확인. 헤드셋 ws 가 아직 연결 안 됐거나, 이전
+        session 의 마지막 pose 가 shared array 에 남아있다면 calibrate 거부.
+        """
+        # 1) freshness check — 새 process 시작 이후 들어온 fresh msg 만 valid
+        stats = self._store.get_stats()
+        last_msg_time = stats.get("last_msg_time", 0.0)
+        if last_msg_time <= 0.0:
+            print(f"\n[XRArmSender] WARN: 헤드셋 ws msg 없음 — 헤드셋 사이트 접속 + Enter VR/AR + 손 들이밀고 '{label}' 재시도")
+            return
+        if last_msg_time < self._sender_start_time:
+            print(
+                f"\n[XRArmSender] WARN: BridgePoseStore msg 가 sender 시작 시각보다 오래됨 "
+                f"(stale). 헤드셋 사이트 새로고침 후 '{label}' 재시도"
+            )
+            return
+        age = time.perf_counter() - last_msg_time
+        if age > 0.5:
+            print(
+                f"\n[XRArmSender] WARN: 마지막 msg age={age:.2f}s > 0.5s — 헤드셋 연결 stale."
+                f" 손 들이밀어 fresh data 확보 후 '{label}' 재시도"
+            )
+            return
+
+        # 2) robot 의 현재 TCP pose 재조회 (sender_base.query_initial_pose 그대로)
         # blocking IO 가 필요해 raw socket 일시 blocking 으로 전환
         was_blocking = self._sock.getblocking()
         self._sock.setblocking(True)
         robot_pos, robot_quat = self.query_initial_pose()
         self._sock.setblocking(was_blocking)
 
-        # 2) user origin
+        # 3) user origin
         if self.hand_side == "right":
             user_pose = self._store.right_arm_pose
         else:
@@ -281,7 +314,7 @@ class XRArmSender(TeleopSenderBase):
             print(f"\n[XRArmSender] WARN: user wrist pose 가 아직 invalid — 손 시야 안 들이밀고 '{label}' 재시도")
             return
 
-        # 3) aligner 캘리브레이션
+        # 4) aligner 캘리브레이션
         print(f"\n[XRArmSender] calibrate ({label})")
         self._aligner.calibrate(user_pose, robot_pos, robot_quat)
         # virtual = origin 으로 set (jump 회피)
@@ -313,7 +346,7 @@ def main() -> int:
                         help="workspace envelope clamp 비활성. 위험 — 디버그 / 검증 후에만 사용")
     parser.add_argument("--workspace", default="default",
                         help="workspace envelope (현재 default 만 지원: "
-                             "x=[-0.7,0.7], y=[-0.7,0.0], z=[0.05,0.8])")
+                             "x=[-0.7,0.7], y=[-0.7,0.7], z=[0.05,0.8])")
     args = parser.parse_args()
 
     workspace = WorkspaceLimits() if args.workspace == "default" else None

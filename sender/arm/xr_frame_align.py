@@ -11,10 +11,26 @@ xr_teleop 의 [run_teleop_ur10e_ws.py:307-358](../../../xr_teleop/scripts/run_te
       2. 그 이후로는 사용자 손목 delta 만 robot origin 에 더해서 target 송신
          delta_p = (curr_user - origin_user) * scale
          R_delta = curr_user_R @ origin_user_R.T
-         target_pos = origin_robot_pos + delta_p
+         target_pos = origin_robot_pos + R_remap @ delta_p
          target_R   = R_delta @ origin_robot_R
       3. 'c' 키 (immediate recalibrate) 또는 'p' resume 시 origin 재캡처
          → jump 회피
+
+WebXR → robot base_link 좌표축 매핑 (R_remap):
+    WebXR (local-floor: +x right, +y up, -z forward) 의 손 변위를 robot
+    base_link 의 [x,y,z] 매핑. 사용자 실측 (init pose HOME_JOINTS) 으로
+    다음 정렬 도출:
+        손 +x (오른쪽)     → robot +x
+        손 +y (위)         → robot +z (위)
+        손 +z (사용자 뒤)  → robot -y
+    즉 robot base_link 의 x 축은 WebXR x 축과 일치하고, WebXR y/z 축이
+    robot z/-y 와 swap. 이는 robot frame 의 x 축 기준 +90° 회전:
+        R_REMAP = R_x(+90°) =
+            [[1,  0,  0],
+             [0,  0, -1],
+             [0,  1,  0]]
+    proper rotation (det = +1). position delta 와 rotation delta 양쪽에
+    conjugation 으로 일관 적용.
 
 teleop_dev 의 TeleopSenderBase 와의 통합:
     sender 측은 robot 의 query_pose 핸드셰이크 로 origin_robot_pose 확보.
@@ -30,6 +46,16 @@ from dataclasses import dataclass
 from typing import Optional, Tuple
 
 import numpy as np
+
+
+# WebXR → robot base_link 좌표축 정렬 (사용자 실측 매핑, R_x(+90°)).
+# 손 +x (오른쪽) → robot +x, 손 +y (위) → robot +z, 손 +z (뒤) → robot -y.
+# 위치 delta 와 회전 delta 양쪽에 일관 적용 (rotation 은 R @ R_delta @ R.T conjugation).
+_R_REMAP = np.array([
+    [ 1.0,  0.0,  0.0],
+    [ 0.0,  0.0, -1.0],
+    [ 0.0,  1.0,  0.0],
+], dtype=np.float64)
 
 
 @dataclass
@@ -104,8 +130,8 @@ class XRRelativeFrameAligner:
         -----
         - calibrate 전: last_target (robot origin) 또는 zeros 반환 (안전).
         - user_pose invalid: last_target 유지 (jump 회피).
-        - 회전: target_R = R_delta @ origin_robot_R (base frame)
-        - 평행이동: target_p = origin_robot_p + (curr_user_p - origin_user_p) * scale
+        - 평행이동: target_p = origin_robot_p + R_remap @ (curr_user_p - origin_user_p) * scale
+        - 회전: target_R = (R_remap @ R_delta @ R_remap.T) @ origin_robot_R
         """
         if self._origin is None:
             if self._last_target_pos is None:
@@ -115,16 +141,21 @@ class XRRelativeFrameAligner:
         if not _is_valid_pose(user_pose):
             return self._last_target_pos.copy(), self._last_target_quat.copy()
 
-        # delta translation (scaled)
+        # delta translation (scaled) — apply WebXR → robot axis remap
         curr_p = user_pose[:3, 3]
         origin_p = self._origin.user_pose[:3, 3]
-        delta_p = (curr_p - origin_p) * self.scale
+        webxr_delta_p = (curr_p - origin_p) * self.scale
+        delta_p = _R_REMAP @ webxr_delta_p
         target_pos = self._origin.robot_pos + delta_p
 
-        # delta rotation: R_delta = curr_user_R @ origin_user_R^T
+        # delta rotation: R_delta = curr_user_R @ origin_user_R^T (in WebXR frame)
         curr_R = user_pose[:3, :3]
         origin_R = self._origin.user_pose[:3, :3]
-        R_delta = curr_R @ origin_R.T
+        R_delta_webxr = curr_R @ origin_R.T
+
+        # WebXR-frame R_delta → robot-frame R_delta via conjugation
+        # (consistent with translation remap, so EE rotates intuitively too).
+        R_delta = _R_REMAP @ R_delta_webxr @ _R_REMAP.T
 
         # target_R = R_delta @ origin_robot_R
         origin_robot_R = _quat_wxyz_to_rotmat(self._origin.robot_quat)

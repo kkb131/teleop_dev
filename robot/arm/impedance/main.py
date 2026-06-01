@@ -159,6 +159,52 @@ class ImpedanceTeleopController:
         if self._ros_node:
             self._ros_node.destroy_node()
 
+    def _move_to_initial_pose_sim(self, backend):
+        """Joint-space linear interp 으로 sim backend 를 yaml 의 initial_pose 로 이동.
+
+        Admittance 와 동일 패턴. RTDE (URScript torque relay) 에서는 동일 인터페이스가
+        없어 별도 helper (_warn_init_pose_rtde) 가 경고만 출력 + skip.
+        """
+        cfg_ip = self.config.initial_pose
+        if not cfg_ip.enabled:
+            print("[ImpedanceTeleop] initial_pose.enabled=False, skip init move")
+            return
+        target = np.array(cfg_ip.joint_values, dtype=np.float64)
+        if target.shape != (6,):
+            print(f"[ImpedanceTeleop] WARN: initial_pose.joint_values shape {target.shape} != (6,), skip init move")
+            return
+        start = np.array(backend.get_joint_positions(), dtype=np.float64)
+        if np.allclose(start, target, atol=1e-3):
+            print("[ImpedanceTeleop] Already at initial pose, skip init move")
+            return
+        duration = max(0.1, float(cfg_ip.move_duration_s))
+        dt = 1.0 / self.config.frequency
+        steps = max(1, int(duration / dt))
+        print(f"[ImpedanceTeleop] Moving to initial pose ({duration:.1f}s, {steps} steps): "
+              f"{[f'{v:+.3f}' for v in target]}")
+        for i in range(1, steps + 1):
+            alpha = i / steps
+            q = (1.0 - alpha) * start + alpha * target
+            backend.send_joint_command(q.tolist())
+            time.sleep(dt)
+        backend.send_joint_command(target.tolist())
+        time.sleep(dt)
+        self.q_current = target.copy()
+        print("[ImpedanceTeleop] Initial pose reached")
+
+    def _warn_init_pose_rtde(self):
+        """RTDE mode 에서 init pose 이동은 URScript torque relay 와 호환되지 않으므로
+        skip + 안내만 출력. 사용자가 teach pendant 또는 별도 스크립트로 robot 을 미리
+        원하는 위치에 두어야 한다.
+        """
+        cfg_ip = self.config.initial_pose
+        if cfg_ip.enabled:
+            print(
+                "[ImpedanceTeleop] WARN: initial_pose.enabled=true 이나 RTDE (torque) mode "
+                "에서는 init move 가 지원되지 않아 skip. teach pendant 로 미리 robot 을 "
+                f"{cfg_ip.joint_values} 부근으로 이동시키거나 --no-init-move 사용 권장."
+            )
+
     def _write_status(
         self,
         ee_vel: float,
@@ -265,6 +311,8 @@ class ImpedanceTeleopController:
             time.sleep(0.1)
 
         self.q_current = np.array(mgr.get_joint_positions())
+        # RTDE (URScript torque) mode 에서는 init move 자동 skip + 경고만.
+        self._warn_init_pose_rtde()
         self.ik.initialize(self.q_current)
         self.ee_pos, self.ee_quat = self.ik.get_ee_pose(self.q_current)
         self.exp_filter.reset(self.ee_pos, self.ee_quat)
@@ -313,6 +361,8 @@ class ImpedanceTeleopController:
                 time.sleep(0.1)
 
             self.q_current = np.array(backend.get_joint_positions())
+            # Sim mode: yaml / argparse 에서 enabled 면 init pose 로 이동
+            self._move_to_initial_pose_sim(backend)
             self.ik.initialize(self.q_current)
             self.ee_pos, self.ee_quat = self.ik.get_ee_pose(self.q_current)
             self.exp_filter.reset(self.ee_pos, self.ee_quat)
@@ -609,6 +659,13 @@ def main():
                         help="Path to YAML config file")
     parser.add_argument("--log", action="store_true",
                         help="Enable CSV logging")
+    init_group = parser.add_mutually_exclusive_group()
+    init_group.add_argument("--init-move", dest="init_move",
+                            action="store_true", default=None,
+                            help="Force move to initial pose at startup (overrides initial_pose.enabled in yaml). Sim mode only — RTDE 는 자동 skip.")
+    init_group.add_argument("--no-init-move", dest="init_move",
+                            action="store_false", default=None,
+                            help="Skip move to initial pose at startup (overrides initial_pose.enabled in yaml).")
     args = parser.parse_args()
 
     config = ImpedanceConfig.load(args.config)
@@ -619,6 +676,8 @@ def main():
         config.input.type = args.input
     if args.robot_ip:
         config.robot.ip = args.robot_ip
+    if args.init_move is not None:
+        config.initial_pose.enabled = args.init_move
 
     log_path = None
     if args.log:

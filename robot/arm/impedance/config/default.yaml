@@ -7,20 +7,10 @@ control:
   frequency_rtde: 125
 
 input:
-  type: "keyboard"
-  cartesian_step: 0.01
-  rotation_step: 0.05
-  xbox_linear_scale: 0.03
-  xbox_angular_scale: 0.08
-  network_port: 9870
-  network_linear_scale: 0.005
-  network_angular_scale: 0.015
-  # Vive Tracker input (use with vive_sender.py)
-  vive_port: 9871
-  vive_linear_scale: 1.0
-  vive_angular_scale: 1.0
-  vive_deadzone: 0.002
-  vive_calibration_file: null
+  type: "keyboard"           # "keyboard" or "unified"
+  cartesian_step: 0.01       # m per key press (keyboard mode)
+  rotation_step: 0.05        # rad per key press (keyboard mode)
+  unified_port: 9871         # UDP port (unified mode — matches TeleopPosePacket / sender_base default)
 
 filter:
   alpha_position: 0.85
@@ -49,3 +39,14 @@ impedance:
   gain_scale_range: [0.25, 2.0]
   enable_coriolis_comp: true
   max_joint_error: [0.20, 0.20, 0.15, 0.30, 0.30, 0.55]  # rad — sized so STIFF reaches TORQUE_LIMITS
+
+initial_pose:
+  # 스크립트 시작 시 아래 joint_values 로 이동 후 control loop 시작.
+  # admittance 와 동일 패턴. 단 RTDE mode (URScript torque relay) 에서는 init
+  # move 가 지원되지 않아 enabled=true 라도 자동 skip + 경고 (사용자가 robot 을
+  # teach pendant 로 미리 위치시키거나, --no-init-move 권장). Sim mode 에서는
+  # backend.send_joint_command 로 보간 이동.
+  enabled: true                  # move on startup (sim mode only; rtde 는 자동 skip)
+  joint_values:                  # UR10e 6 joint angles (rad): shoulder_pan ... wrist_3
+    [2.24, -1.2808, 2.16, -0.8848, 2.24, 0.0]   # = robot.config.HOME_JOINTS
+  move_duration_s: 3.0           # 보수적 default — safety.max_joint_vel 1.0 rad/s 와 호환
