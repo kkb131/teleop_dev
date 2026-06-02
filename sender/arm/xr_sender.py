@@ -152,6 +152,11 @@ class XRArmSender(TeleopSenderBase):
         print("[XRArmSender] convention =", self.convention, "  scale =", self.scale)
         print("[XRArmSender] Quest 3 / Galaxy XR Chrome → http://localhost:"
               f"{self._store.port}/ → Enter VR/AR → 손 들이밀기 → 'r' 키")
+        print("[XRArmSender] ⚠️  Chrome 창 / 헤드셋의 정면이 robot base_link 의")
+        print("[XRArmSender]    정면 (+x) 과 align 된 자세에서 'r' 을 누르세요.")
+        print("[XRArmSender]    헤드셋이 N° 회전한 자세로 'r' 을 누르면 손 motion")
+        print("[XRArmSender]    이 N° 어긋난 frame 으로 매핑돼 robot 거동이 의도와")
+        print("[XRArmSender]    회전된 채로 나옴. (xr_frame_align.py docstring 참조)")
         print("[XRArmSender] ─────────────────────────────────────────────")
         if self.no_keyboard:
             print("[XRArmSender] keyboard 비활성 (no-keyboard=True). 시작 시 즉시 calibrate.")
