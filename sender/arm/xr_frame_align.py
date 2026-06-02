@@ -118,9 +118,10 @@ _R_REMAP_ROT = np.array([
 # axis 와 angle 부호를 둘 다 반전 → R(axis,+θ) = R(-axis,-θ) 라서 결과 동일.
 # 즉 단순 column 부호 반전만으로는 "회전 방향만 반대로" 효과가 절대 안 남.
 #
-# 해결: WebXR R_delta 에 D = diag(s_x, s_y, s_z) (s_i ∈ {+1,-1}) 을 양옆에
-# 곱해 D · R_delta(axis,θ) · D = R_delta(D·axis, θ). axis 의 i 성분 부호만
-# 반전 → 해당 WebXR 축 회전의 방향만 단독 부호 반전.
+# 해결: R_delta 를 quaternion (w, x, y, z) 으로 풀고 vector 부분의 i 성분에
+# _ROT_SIGN[i] 를 곱한 뒤 다시 rotation matrix 로 변환. 이는 axis-angle 의
+# i 성분만 부호 반전 → 해당 WebXR 축의 회전 성분만 단독 부호 반전 (다른
+# 축의 회전 성분은 영향 없음).
 #
 # 사용법:
 #   - 각 entry (1, 1, 1) 은 WebXR 축 회전 (x roll / y yaw / z pitch) 의 방향.
@@ -136,6 +137,20 @@ _R_REMAP_ROT = np.array([
 _ROT_SIGN = np.array([1.0, 1.0, 1.0], dtype=np.float64)
 #                     ↑    ↑    ↑
 #                     x    y    z   ← WebXR axis (roll / yaw / pitch)
+
+
+def _apply_rot_sign(R_webxr: np.ndarray) -> np.ndarray:
+    """WebXR R_delta 의 각 axis 회전 성분 부호를 _ROT_SIGN 에 따라 반전.
+
+    axis-angle 의 i 성분에 _ROT_SIGN[i] 를 곱하는 것과 동치 — quaternion
+    (w, x, y, z) 의 vector 성분을 element-wise 로 _ROT_SIGN 과 곱하면 정확히
+    axis 의 그 성분만 부호 반전.
+    """
+    if np.allclose(_ROT_SIGN, 1.0):
+        return R_webxr
+    q = _rotmat_to_quat_wxyz(R_webxr)
+    q[1:] = q[1:] * _ROT_SIGN
+    return _quat_wxyz_to_rotmat(q)
 
 
 def _check_remap_rot() -> None:
@@ -246,6 +261,9 @@ class XRRelativeFrameAligner:
         curr_R = user_pose[:3, :3]
         origin_R = self._origin.user_pose[:3, :3]
         R_delta_webxr = curr_R @ origin_R.T
+
+        # axis-angle level sign flip — _ROT_SIGN[i] 가 WebXR i 축 회전 성분 부호.
+        R_delta_webxr = _apply_rot_sign(R_delta_webxr)
 
         # WebXR-frame R_delta → robot-frame R_delta via conjugation.
         # 회전 매핑은 별도 _R_REMAP_ROT (translation 과 독립적 fine tune 가능).
