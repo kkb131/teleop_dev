@@ -47,7 +47,7 @@ pip install "numpy<2"
 다음 파일이 존재하는지 확인합니다:
 
 ```bash
-ls /workspaces/tamp_ws/src/tamp_dev/.docker/assets/ur10e.urdf
+ls /workspaces/tamp_ws/src/teleop_dev/.docker/assets/ur10e.urdf
 ```
 
 이 파일은 로봇 모델 정보를 담고 있으며, 프로그램이 자동으로 참조합니다.

@@ -4,8 +4,8 @@ Minimal pipeline: F/T sensor → BaseFrameFTSource (negate X,Y) → AdmittanceCo
 Push the robot by hand and it should follow compliantly.
 
 Usage:
-    cd /workspaces/tamp_ws/src/tamp_dev
-    python3 -m robot.arm.admittance.test_admittance --robot-ip 192.168.0.2
+    cd /workspaces/tamp_ws/src/teleop_dev
+    python3 -m robot.arm.admittance.tests.test_admittance --robot-ip 192.168.0.2
 """
 
 import argparse

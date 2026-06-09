@@ -32,3 +32,4 @@ dependencies:
     - pyrealsense2          # Intel RealSense D405 (realsense_sender)
     - opencv-python         # 시각화 + BGR↔RGB (realsense_sender)
     - aiohttp>=3.8          # Galaxy XR / Quest 3 ws bridge HTTP+WS server (xr_common.bridge_pose_store)
+    - ur-rtde>=1.5.0        # sender/arm/move_to_pose.py (UR10e RTDE 직접 명령 유틸리티)

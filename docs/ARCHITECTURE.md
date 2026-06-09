@@ -52,21 +52,32 @@ teleop_dev/
 │   │   ├── config/default.yaml        #     기본 설정
 │   │   └── tests/                     #     단계별 테스트 (step1~step6)
 │   ├── hand/                          #   손 입력장치 → UDP 9872
-│   │   ├── manus_reader.py            #     Manus SDK subprocess wrapper
-│   │   ├── manus_sender.py            #     UDP sender (60Hz)
+│   │   ├── manus_sender.py            #     Manus → UDP sender (60Hz, --retarget {none|ergo-direct|dex})
+│   │   ├── manus_reader.py            #     Manus SDK subprocess wrapper (legacy)
+│   │   ├── manus_reader_ros2.py       #     manus_data_publisher ROS2 subscriber (권장)
 │   │   ├── manus_config.py            #     Manus YAML 설정 로더
-│   │   ├── calibrate.py               #     손 캘리브레이션
-│   │   ├── hand_visualizer.py         #     손 관절 시각화
+│   │   ├── realsense_sender.py        #     RealSense D405 → MediaPipe → [3A] dex_retarget → UDP
+│   │   ├── realsense/                 #     RealSense D405 + MediaPipe HandLandmarker 파이프라인
+│   │   ├── calibrate.py               #     2-pose (open/fist) ROM 캘리브레이션
+│   │   ├── hand_visualizer.py         #     손 관절 시각화 (pygame)
+│   │   ├── keyboard_state.py          #     hand sender 공통 키보드 이벤트 (E-Stop/reset/quit/speed)
+│   │   ├── core/                      #     세대 공통 인프라
+│   │   │   ├── dg5f_config.py         #       DG5F 관절 이름/한계/링크 길이 상수
+│   │   │   ├── filters.py             #       EMA 필터 (모든 retarget 세대 공유)
+│   │   │   ├── mano_transform.py      #       MANO frame 변환 (manus/mediapipe convention)
+│   │   │   └── retarget_base.py       #       HandRetargetBase ABC
+│   │   ├── gen1a_ergo_direct/         #     [1A] Manus ergonomics → DG5F 직접 매핑 (단순 스케일)
+│   │   ├── gen3a_dex_retarget/        #     [3A] DexPilot/Vector 옵티마이저 wrapper (dex_retargeting)
 │   │   ├── xr_hand_sender.py          #     Galaxy XR / Quest 3 hand sender (DexPilot)
 │   │   ├── xr_dex_retargeter.py       #     WebXR 25-joint → DG-5F 20-vec retarget wrapper
 │   │   ├── xr_remap.py                #     WebXR 25 → wrist-local + palm-aligned MANO frame
-│   │   ├── config/default.yaml        #     기본 설정
+│   │   ├── config/default.yaml        #     manus_sender 기본 설정
 │   │   ├── config_xr/                 #     XR retarget URDF + meshes + DexPilot yml
 │   │   │   ├── dg5f_xr.yml            #       right + left DexPilot config (B5)
 │   │   │   ├── dg5f_right_retarget.urdf   #   right URDF (PIP/DIP lower=0)
 │   │   │   ├── dg5f_left_retarget.urdf    #   left URDF (PIP/DIP lower=0, B5)
 │   │   │   └── meshes/{visual,collision}/ #   rl_dg_* + ll_dg_* (56 + 56 files)
-│   │   ├── sdk/                       #     Manus C++ SDK (사전 빌드 .so)
+│   │   ├── sdk/                       #     Manus C++ SDK + ROS2 publisher 소스 (사전 빌드 .so)
 │   │   └── tests/                     #     단계별 테스트 (step0~step4)
 │   └── xr_common/                     #   XR (Galaxy XR / Quest 3) 공통 — arm + hand 가 공유
 │       ├── bridge_pose_store.py       #     aiohttp HTTP+WS server, Singleton (port 8013)
@@ -111,19 +122,14 @@ teleop_dev/
 │   │       ├── joystick_cartesian.py  #       Xbox Cartesian 제어
 │   │       ├── keyboard_servo_admittance.py  # 키보드 + F/T 어드미턴스
 │   │       └── docs/                  #       매뉴얼, 사용 가이드
-│   └── hand/                          #   손 제어 (Modbus TCP → DG5F)
-│       ├── dg5f_client.py             #     Modbus TCP 드라이버 (pymodbus, slave ID 1)
-│       ├── dg5f_ros2_client.py        #     ROS2 JointTrajectory wrapper
-│       ├── receiver.py                #     UDP 9872 수신 → retarget → Modbus 전송
-│       ├── retarget.py                #     Manus 20관절 → DG5F 20모터 매핑
-│       ├── tesollo_config.py          #     YAML 설정 로더
-│       ├── config/default.yaml        #     기본 설정
-│       └── tests/                     #     Modbus, retarget, E2E 테스트
+│   └── hand/                          #   손 제어 (UDP 수신 → ROS2 토픽 publish)
+│       ├── dg5f_ros2_client.py        #     ROS2 MultiDOFCommand (real) / JointState (sim) publisher
+│       ├── receiver.py                #     UDP 9872 수신 → EMA filter → ROS2 publish (sender 측에서 retarget 완료)
+│       └── tests/                     #     ROS2 PID 튜닝, zero-pose, direct-pub, 프리셋 포즈 테스트
 │
 ├── scripts/                           # entry-point 스크립트
 │   ├── run_xr_teleop.py               #   XR 통합 launcher (arm + hand 동시, BridgePoseStore 공유)
-│   ├── xr_pose_diag.py                #   XR pose-only diagnostic (mean_freq / lost / recovery / jitter)
-│   └── run_tests.sh                   #   기존 unit test 일괄 실행
+│   └── xr_pose_diag.py                #   XR pose-only diagnostic (mean_freq / lost / recovery / jitter)
 │
 ├── docs/                              # 문서
 │   ├── ARCHITECTURE.md                #   이 파일
@@ -258,9 +264,8 @@ python3 -m robot.hand.receiver --hand-ip 169.254.186.72
 | pinocchio | FK/Jacobian/IK (apt: ros-humble-pinocchio) |
 | pin-pink | QP 기반 IK (proxqp 백엔드) |
 | proxsuite | QP solver |
-| ur-rtde | UR10e RTDE 통신 |
-| pymodbus | Tesollo DG5F Modbus TCP |
-| rclpy | ROS2 (SimBackend, ControllerSwitcher) |
+| ur-rtde | UR10e RTDE 통신 (servoJ / URScript 업로드) |
+| rclpy | ROS2 (SimBackend, ControllerSwitcher, DG5F MultiDOFCommand) |
 | PyYAML | YAML 설정 파싱 |
 
 ---
@@ -280,5 +285,5 @@ from sender.arm.vive_tracker import ViveTracker
 from robot.config import JOINT_NAMES, URDF_PATH
 from robot.core.robot_backend import create_backend
 from robot.core.pink_ik import PinkIK
-from robot.hand.dg5f_client import DG5FClient
+from robot.hand.dg5f_ros2_client import DG5FROS2Client
 ```

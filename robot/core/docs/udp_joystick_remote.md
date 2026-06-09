@@ -318,7 +318,7 @@ input:
 
 ```bash
 # 로봇 PC (수신)
-cd /workspaces/tamp_ws/src/tamp_dev
+cd /workspaces/tamp_ws/src/teleop_dev
 python3 -m robot.arm.admittance.main --mode rtde --input network
 
 # 서버 PC (송신)

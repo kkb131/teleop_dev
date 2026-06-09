@@ -47,16 +47,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 #   pin-pink    - QP 기반 IK (pinocchio 위에 구축)
 #                 주의: "pip install pink"는 코드 포매터!
 #   proxsuite   - QP solver 백엔드
-#   ur-rtde     - UR 로봇 RTDE 통신
-#   pymodbus    - Tesollo DG5F Modbus TCP (3.10+ device_id API 필수)
+#   ur-rtde     - UR 로봇 RTDE 통신 (servoJ + URScript socket)
 #   PyYAML      - YAML 설정 파싱
 #   numpy <2.0  - pinocchio ABI 호환
+#
+# 참고: DG5F 하드웨어 제어는 dg5f_driver (ROS2) 가 담당.
+# robot/hand/* 는 ROS2 토픽으로만 통신하므로 pymodbus 불필요.
 # =============================================================================
 RUN pip install --no-cache-dir \
     "pin-pink>=4.0.0" \
     "proxsuite>=0.6.0" \
     "ur-rtde>=1.5.0" \
-    "pymodbus>=3.10,<4" \
     "PyYAML>=6.0" \
     "numpy<2.0"
 

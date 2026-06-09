@@ -5,8 +5,7 @@ DG5F 핸드로 retargeting하는 실행 가이드.
 
 알고리즘 / 설치 / 트러블슈팅 상세는 다음 문서 참조:
 - 설치 + 의존성: [`gen3a_dex_retarget/docs/dex_retarget_setup.md`](../gen3a_dex_retarget/docs/dex_retarget_setup.md)
-- 전체 핸드 시스템 개요: [`docs/hand_manus_guide.md`](../../../docs/hand_manus_guide.md)
-- 1A vs 3A 비교 / 아키텍처: [`hand_retarget_1a_impl.md`](hand_retarget_1a_impl.md)
+- 전체 핸드 시스템 개요: [`docs/hand_manus_guide.md`](../../../docs/hand_manus_guide.md) (Mode A/B/C 비교 + 빠른 시작 요약 포함)
 
 ---
 

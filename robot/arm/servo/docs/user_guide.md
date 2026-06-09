@@ -102,7 +102,7 @@ robot/
 ### 3.1 실행
 
 ```bash
-cd /workspaces/tamp_ws/src/tamp_dev
+cd /workspaces/tamp_ws/src/teleop_dev
 
 # Sim 모드 (기본)
 python3 -m robot.arm.servo.keyboard_forward --mode sim
@@ -145,7 +145,7 @@ Pinocchio의 Jacobian + Damped Least Squares (DLS)를 사용하여 end-effector�
 ### 4.1 실행
 
 ```bash
-cd /workspaces/tamp_ws/src/tamp_dev
+cd /workspaces/tamp_ws/src/teleop_dev
 
 # Sim 모드
 python3 -m robot.arm.servo.keyboard_cartesian --mode sim
@@ -218,7 +218,7 @@ Xbox 컨트롤러로 Cartesian 제어합니다 (Pinocchio DLS).
 ### 5.1 실행
 
 ```bash
-cd /workspaces/tamp_ws/src/tamp_dev
+cd /workspaces/tamp_ws/src/teleop_dev
 
 # joy_node 먼저 실행 (별도 터미널)
 ros2 run joy joy_node
@@ -275,7 +275,7 @@ Cartesian 키보드 텔레오퍼레이션에 F/T 센서 기반 어드미턴스 �
 ### 6.2 실행
 
 ```bash
-cd /workspaces/tamp_ws/src/tamp_dev
+cd /workspaces/tamp_ws/src/teleop_dev
 
 # Sim 모드 (admittance 비활성, keyboard Cartesian만 동작)
 python3 -m robot.arm.servo.keyboard_servo_admittance --mode sim

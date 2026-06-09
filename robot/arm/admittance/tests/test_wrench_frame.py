@@ -6,11 +6,11 @@ Two modes:
      switch between transformations with keys 1-6
 
 Usage:
-    cd /workspaces/tamp_ws/src/tamp_dev
+    cd /workspaces/tamp_ws/src/teleop_dev
     # Sensor reading only
-    python3 -m robot.arm.admittance.test_wrench_frame --robot-ip 192.168.0.2
+    python3 -m robot.arm.admittance.tests.test_wrench_frame --robot-ip 192.168.0.2
     # End-to-end servo test
-    python3 -m robot.arm.admittance.test_wrench_frame --robot-ip 192.168.0.2 --servo
+    python3 -m robot.arm.admittance.tests.test_wrench_frame --robot-ip 192.168.0.2 --servo
 """
 
 import argparse

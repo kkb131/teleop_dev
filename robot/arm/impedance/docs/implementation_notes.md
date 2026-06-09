@@ -109,7 +109,7 @@ Python (125Hz)                              UR Controller (500Hz)
 ### 최소 테스트 (position hold)
 
 ```bash
-cd /workspaces/tamp_ws/src/tamp_dev
+cd /workspaces/tamp_ws/src/teleop_dev
 python3 -m robot.arm.impedance.test_impedance_bare --robot-ip 192.168.0.2 --preset SOFT
 ```
 

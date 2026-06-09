@@ -16,9 +16,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # --- Python dependencies ---
+# 최소 구성: keyboard / joystick / Vive (openvr) sender 용.
+# XR / Manus / RealSense 등 추가 입력을 쓰려면 conda 환경 (environment.yaml) 사용 권장.
 RUN pip install --no-cache-dir \
     "openvr>=1.26.701" \
-    "numpy" \
+    "numpy<2" \
     "pynput>=1.7.6" \
     "pyyaml>=6.0" \
     "pygame>=2.0.0"

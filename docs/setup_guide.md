@@ -242,7 +242,6 @@ pip install \
   "pin-pink>=4.0.0" \
   "proxsuite>=0.6.0" \
   "ur-rtde>=1.5.0" \
-  "pymodbus>=3.10,<4" \
   "PyYAML>=6.0" \
   "numpy<2.0"
 ```
@@ -289,11 +288,11 @@ python3 -m robot.arm.admittance.main --mode rtde --input unified --robot-ip 192.
 | pinocchio | apt (`ros-humble-pinocchio`) | FK/Jacobian/IK |
 | pin-pink | pip | QP 기반 IK (Pink) |
 | proxsuite | pip | QP solver 백엔드 |
-| ur-rtde | pip | UR10e RTDE 통신 |
-| pymodbus | pip | Tesollo DG5F Modbus TCP |
+| ur-rtde | pip | UR10e RTDE 통신 (servoJ / URScript socket) |
 | PyYAML | pip | YAML 설정 파싱 |
-| rclpy | apt (ROS2) | SimBackend, ControllerSwitcher |
+| rclpy | apt (ROS2) | SimBackend, ControllerSwitcher, DG5F MultiDOFCommand |
 | sensor_msgs | apt (ROS2) | JointState 메시지 |
+| control_msgs | apt (ROS2) | DG5F MultiDOFCommand (dg5f_driver 인터페이스) |
 
 ---
 
@@ -301,5 +300,5 @@ python3 -m robot.arm.admittance.main --mode rtde --input unified --robot-ip 192.
 
 - **`pip install pink` 금지**: `pink`는 코드 포매터. IK 라이브러리는 **`pip install pin-pink`**
 - **numpy < 2.0 필수**: pinocchio가 numpy 1.x ABI로 컴파일됨
-- **pymodbus >= 3.10 필수**: `device_id=` 파라미터 API 사용
 - **RTDEControlInterface 사용 금지** (impedance 모드): UR10e에서 hang 발생. RTDEIOInterface + TCP socket 조합 사용
+- **DG5F 직접 Modbus 통신 불필요**: `robot/hand/*` 는 `dg5f_driver` (ROS2 dg5f_ros2 스택) 를 통해 모터 명령 전송. Modbus TCP 는 driver 가 내부 처리

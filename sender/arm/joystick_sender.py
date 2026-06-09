@@ -7,7 +7,7 @@ The receiver (NetworkInput in input_handler.py) handles deadzone/scaling.
 Requirements: pygame  (pip install pygame)
 
 Usage:
-    python3 joystick_sender.py --target-ip <JETSON_IP> --port 9870
+    python3 -m sender.arm.joystick_sender --target-ip <ROBOT_PC_IP> --port 9870
 """
 
 import argparse

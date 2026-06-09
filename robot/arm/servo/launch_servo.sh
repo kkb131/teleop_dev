@@ -1,87 +1,44 @@
 #!/bin/bash
-# Servo 기능 실행 가이드
+# UR10e servo (단순 DLS IK) 실행 가이드 — info-only.
 #
-# 사용법: bash robot/arm/servo/launch_servo.sh [mode]
-#   mode: keyboard_forward  - Forward Position Controller 키보드 테스트
-#         keyboard_servo    - MoveIt Servo 키보드 Cartesian 텔레옵
-#         joystick_servo    - MoveIt Servo Xbox 조이스틱 텔레옵
-#         info              - 실행 방법 안내 (기본값)
+# Usage: bash robot/arm/servo/launch_servo.sh
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WS_DIR="/workspaces/tamp_ws"
-MODE="${1:-info}"
 
-# Colors
-RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-show_info() {
-    echo -e "${CYAN}═══════════════════════════════════════════════════${NC}"
-    echo -e "${CYAN}          UR10e Servo Control Guide${NC}"
-    echo -e "${CYAN}═══════════════════════════════════════════════════${NC}"
-    echo ""
-    echo -e "${GREEN}[1] Forward Position Controller (키보드)${NC}"
-    echo "    추가 설치 없이 바로 테스트 가능. Joint 단위 직접 제어."
-    echo ""
-    echo -e "    ${YELLOW}# T1: UR Driver${NC}"
-    echo "    ros2 launch ur_robot_driver ur10e.launch.py use_fake_hardware:=true robot_ip:=0.0.0.0"
-    echo ""
-    echo -e "    ${YELLOW}# T2: MoveIt + RViz${NC}"
-    echo "    ros2 launch isaac_ros_cumotion_examples ur.launch.py ur_type:=ur10e"
-    echo ""
-    echo -e "    ${YELLOW}# T3: Keyboard teleop${NC}"
-    echo "    cd ${WS_DIR}/src/tamp_dev && python3 -m robot.arm.servo.keyboard_forward"
-    echo ""
-    echo -e "${GREEN}[2] MoveIt Servo (키보드 Cartesian)${NC}"
-    echo "    Cartesian 제어. 충돌 체크 + 특이점 감지 내장."
-    echo ""
-    echo -e "    ${YELLOW}# T1: UR Driver${NC}"
-    echo "    ros2 launch ur_robot_driver ur10e.launch.py use_fake_hardware:=true robot_ip:=0.0.0.0"
-    echo ""
-    echo -e "    ${YELLOW}# T2: MoveIt + RViz + Servo${NC}"
-    echo "    ros2 launch isaac_ros_cumotion_examples ur.launch.py ur_type:=ur10e launch_servo:=true"
-    echo ""
-    echo -e "    ${YELLOW}# T3: Keyboard teleop${NC}"
-    echo "    cd ${WS_DIR}/src/tamp_dev && python3 servo/keyboard_servo.py"
-    echo ""
-    echo -e "${GREEN}[3] MoveIt Servo (Xbox 조이스틱)${NC}"
-    echo "    Xbox 컨트롤러로 Cartesian 제어."
-    echo ""
-    echo -e "    ${YELLOW}# T1~T2: 위와 동일 (launch_servo:=true 필수)${NC}"
-    echo ""
-    echo -e "    ${YELLOW}# T3: Joy node${NC}"
-    echo "    ros2 run joy joy_node"
-    echo ""
-    echo -e "    ${YELLOW}# T4: Joystick teleop${NC}"
-    echo "    cd ${WS_DIR}/src/tamp_dev && python3 servo/joystick_servo.py"
-    echo ""
-    echo -e "${CYAN}═══════════════════════════════════════════════════${NC}"
-    echo -e "  source ${WS_DIR}/install/setup.bash  (moveit_servo 빌드 후)"
-    echo -e "${CYAN}═══════════════════════════════════════════════════${NC}"
-}
+cat <<EOF
+${CYAN}═══════════════════════════════════════════════════${NC}
+${CYAN}     UR10e Servo Control (DLS IK / Pinocchio)${NC}
+${CYAN}═══════════════════════════════════════════════════${NC}
 
-case "$MODE" in
-    keyboard_forward)
-        echo -e "${GREEN}Starting Forward Position Controller keyboard teleop...${NC}"
-        cd "${WS_DIR}/src/tamp_dev"
-        python3 -m robot.arm.servo.keyboard_forward
-        ;;
-    keyboard_servo)
-        echo -e "${GREEN}Starting MoveIt Servo keyboard Cartesian teleop...${NC}"
-        cd "${WS_DIR}/src/tamp_dev"
-        python3 servo/keyboard_servo.py
-        ;;
-    joystick_servo)
-        echo -e "${GREEN}Starting MoveIt Servo joystick teleop...${NC}"
-        cd "${WS_DIR}/src/tamp_dev"
-        python3 servo/joystick_servo.py
-        ;;
-    info|*)
-        show_info
-        ;;
-esac
+robot/arm/servo 모듈은 네트워크 입력 없이 로컬 키보드/조이스틱으로
+UR10e 를 직접 제어. 자세한 옵션은 각 모듈의 --help 참조.
+
+${GREEN}[1] Joint-space (forward) — 키보드${NC}
+    python3 -m robot.arm.servo.keyboard_forward --mode sim
+    python3 -m robot.arm.servo.keyboard_forward --mode rtde --robot-ip 192.168.0.2
+
+${GREEN}[2] Cartesian (DLS IK) — 키보드${NC}
+    python3 -m robot.arm.servo.keyboard_cartesian --mode sim
+    python3 -m robot.arm.servo.keyboard_cartesian --mode rtde --robot-ip 192.168.0.2
+
+${GREEN}[3] Cartesian (DLS IK) — Xbox joystick (ROS2 /joy 필요)${NC}
+    ros2 run joy joy_node
+    python3 -m robot.arm.servo.joystick_cartesian --mode sim
+
+${GREEN}[4] Cartesian + F/T admittance — 키보드 (rtde 모드 전용)${NC}
+    python3 -m robot.arm.servo.keyboard_servo_admittance --mode rtde --robot-ip 192.168.0.2
+
+${YELLOW}sim 모드 ROS2 전제:${NC}
+    ros2 launch ur_robot_driver ur10e.launch.py use_fake_hardware:=true robot_ip:=0.0.0.0
+    또는 Isaac Sim 의 UR10e + DG5F scene.
+
+${CYAN}═══════════════════════════════════════════════════${NC}
+EOF

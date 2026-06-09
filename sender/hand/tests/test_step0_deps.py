@@ -193,19 +193,19 @@ def main():
 
     import os
 
-    print("\n[TEST] Conda environment (tamp_sender)...", end=" ")
+    print("\n[TEST] Conda environment (teleop_operator)...", end=" ")
     conda_env = os.environ.get("CONDA_DEFAULT_ENV", "")
-    if conda_env == "tamp_sender":
+    if conda_env == "teleop_operator":
         print(f"[PASS] active: {conda_env}")
         passed += 1
     elif conda_env:
-        print(f"[INFO] active: '{conda_env}' (expected 'tamp_sender')")
-        print("       Run: conda activate tamp_sender")
+        print(f"[INFO] active: '{conda_env}' (expected 'teleop_operator')")
+        print("       Run: conda activate teleop_operator")
         passed += 1  # informational, not a hard failure
     else:
         print("[INFO] No conda env active")
-        print("       Recommended: conda activate tamp_sender")
-        print("       See docs/host_setup_guide.md for setup")
+        print("       Recommended: conda activate teleop_operator")
+        print("       See docs/setup_guide.md for setup")
         passed += 1  # informational
 
     # ── LD_LIBRARY_PATH (informational) ─────────────────
@@ -221,10 +221,10 @@ def main():
         print("         mkdir -p $CONDA_PREFIX/etc/conda/activate.d")
         print("         cat > $CONDA_PREFIX/etc/conda/activate.d/manus_env.sh << 'EOF'")
         print("         #!/bin/bash")
-        print("         export MANUS_SDK_PATH=~/tamp_ws/src/tamp_dev/manus/sdk")
+        print("         export MANUS_SDK_PATH=~/tamp_ws/src/teleop_dev/sender/hand/sdk")
         print("         export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$MANUS_SDK_PATH")
         print("         EOF")
-        print("         conda deactivate && conda activate tamp_sender")
+        print("         conda deactivate && conda activate teleop_operator")
         passed += 1  # informational
 
     # ── udev rules ───────────────────────────────────────

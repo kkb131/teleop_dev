@@ -9,7 +9,7 @@
 Computes rotation R and translation t such that:
     pos_robot = R @ pos_vive + t
 
-Saves calibration to JSON file for use by ViveNetworkInput.
+Saves calibration to JSON file for use by vive_sender (operator PC).
 
 Usage:
     python3 -m sender.arm.calibrate --output calibration.json
