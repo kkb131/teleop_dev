@@ -180,7 +180,8 @@ def main() -> int:
 
     # shared
     parser.add_argument("--hand", default="right", choices=["right", "left"],
-                        help="Hand side (default: right; left 미검증)")
+                        help="Hand side (default: right). 손은 좌/우 검증 완료 — "
+                             "왼팔(arm) 첫 가동은 docs/xr_dual_arm_left_tuning_ko.md 참조")
     parser.add_argument("--bridge-port", type=int, default=None,
                         help="BridgePoseStore ws port (default 8013 or env XR_BRIDGE_PORT)")
     parser.add_argument("--no-keyboard", action="store_true",

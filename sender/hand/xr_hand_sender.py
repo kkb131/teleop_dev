@@ -125,7 +125,7 @@ def main() -> int:
                         help="UDP target port (default 9872)")
     parser.add_argument("--hz", type=int, default=60, help="Send rate Hz (default 60)")
     parser.add_argument("--hand", default="right", choices=["right", "left"],
-                        help="Hand side (default: right; left 미검증)")
+                        help="Hand side (default: right). 좌/우 모두 검증 완료")
     parser.add_argument("--convention", default="mediapipe", choices=["mediapipe", "manus"],
                         help="WebXR → MANO chirality. visual 검증 후 fist↔spread inversion 시 manus 로 toggle")
     parser.add_argument("--bridge-port", type=int, default=None,

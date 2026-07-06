@@ -204,7 +204,12 @@ python3 -m scripts.run_xr_teleop --target-ip 192.168.0.10 --no-hand
 
 # Left hand (B5, 검증 완료)
 python3 -m scripts.run_xr_teleop --target-ip 192.168.0.10 --hand left
-# robot PC 측: receiver --hand left + dg5f_left_pid_all_controller.launch.py
+# robot PC 측: receiver --hand left --port 9874 + dg5f_left_pid_all_controller.launch.py
+
+# 양팔 + 양손 동시 (dual — 팔별 remap/scale/workspace 는 yaml 로)
+python3 -m scripts.run_xr_dual_teleop --config scripts/config/xr_dual.yaml \
+    --target-ip 192.168.0.10
+# 왼팔 첫 가동 전 필독: docs/xr_dual_arm_left_tuning_ko.md
 
 # 정상속 (검증 후)
 python3 -m scripts.run_xr_teleop --target-ip 192.168.0.10 --scale 1.0

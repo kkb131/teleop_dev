@@ -2,6 +2,7 @@
 
 UR10e 팔 + Tesollo DG5F 손의 원격조종(teleop) 시스템.
 조종 PC와 로봇 PC 2-tier 구조로 분리되며, UDP로 통신한다.
+양팔(UR10e×2) + 양손(DG5F×2) 동시 조종을 지원한다 (팔/손별 UDP 포트 분리).
 
 ---
 
@@ -11,20 +12,32 @@ UR10e 팔 + Tesollo DG5F 손의 원격조종(teleop) 시스템.
 조종 PC (Operator)                         로봇 PC (AGX Orin)
 ┌──────────────────────┐                  ┌───────────────────────────┐
 │  Vive Tracker 3.0    │                  │  UnifiedNetworkInput      │
-│  Keyboard / Xbox     │                  │    ↓                      │
-│  Galaxy XR / Quest 3 ┼── UDP 9871 ────→ │  ExpFilter → Pink IK      │
-│  ┌────────────────┐  │                  │    ↓                      │
-│  │ BridgePoseStore│  │                  │  Admittance / Impedance   │
-│  │ (ws bridge)    │  │                  │    ↓                      │
-│  └────────────────┘  │                  │  UR10e (servoJ / torque)  │
+│  Keyboard / Xbox     │   UDP 9871 (R)   │    ↓                      │
+│  Galaxy XR / Quest 3 ┼── UDP 9875 (L) → │  ExpFilter → Pink IK      │
+│  ┌────────────────┐  │   (팔별 수신부   │    ↓                      │
+│  │ BridgePoseStore│  │    프로세스 ×2)  │  Admittance / Impedance   │
+│  │ (ws bridge)    │  │                  │    ↓ RTDE servoJ          │
+│  └────────────────┘  │                  │  UR10e right / left       │
 ├──────────────────────┤                  ├───────────────────────────┤
-│  Manus Gloves        │                  │  Receiver → Retarget     │
-│  RealSense D405      │                  │    ↓                      │
-│  Galaxy XR / Quest 3 ┼── UDP 9872 ────→ │  Tesollo DG5F (Modbus)   │
-└──────────────────────┘                  └───────────────────────────┘
+│  Manus Gloves        │   UDP 9872 (R)   │  Receiver ×2 → EMA        │
+│  RealSense D405      │   UDP 9874 (L)   │    ↓ ROS2 MultiDOFCommand │
+│  Galaxy XR / Quest 3 ┼────────────────→ │  dg5f_driver → Modbus     │
+└──────────────────────┘                  │    → DG5F right / left    │
+                                          └───────────────────────────┘
 ```
 
-XR 헤드셋은 USB-C (`adb reverse`) 로 연결, 자체 ws bridge (port 8013) 가 헤드셋 Chrome → 조종 PC pose 송신. 같은 BridgePoseStore singleton 이 팔 (UDP 9871) 과 손 (UDP 9872) sender 양쪽에 데이터 공급.
+XR 헤드셋은 USB-C (`adb reverse`) 로 연결, 자체 ws bridge (port 8013) 가 헤드셋 Chrome → 조종 PC pose 송신. 같은 BridgePoseStore singleton 이 팔/손 sender 전체에 데이터 공급.
+
+### 포트 배치 (단일 소스: launcher/config/teleop_system.yaml)
+
+| 포트 | 바인딩 | 용도 |
+|------|--------|------|
+| 8013 | 조종 PC | BridgePoseStore HTTP/WS (헤드셋 pose) |
+| 8014 | 조종 PC | 카메라 뷰 WS (sender.cam) |
+| 9871 / 9875 | robot PC | 오른팔 / 왼팔 UDP (TeleopPosePacket) |
+| 9872 / 9874 | robot PC | 오른손 / 왼손 UDP (HandData) |
+| 9873 | robot PC | 카메라 ZMQ PUB (robot → 조종) |
+| 9876 | robot PC | 통합 런처 agent HTTP |
 
 ---
 
@@ -46,8 +59,8 @@ teleop_dev/
 │   │   ├── calibrate.py               #     SteamVR → base_link 좌표 보정
 │   │   ├── keyboard_sender.py         #     WASDQE 키보드 sender
 │   │   ├── joystick_sender.py         #     Xbox/Logitech 게임패드 sender
-│   │   ├── xr_sender.py               #     Galaxy XR / Quest 3 sender (BridgePoseStore 공유)
-│   │   ├── xr_frame_align.py          #     WebXR wrist → base_link, relative motion + recalibrate
+│   │   ├── xr_sender.py               #     Galaxy XR / Quest 3 sender (BridgePoseStore 공유, 팔별 r_remap/key_queue)
+│   │   ├── xr_frame_align.py          #     WebXR wrist → base_link, relative motion + 팔별 remap (rpy/matrix)
 │   │   ├── monitor.py                 #     UDP 패킷 모니터 (디버깅)
 │   │   ├── move_to_pose.py            #     단일 포즈 전송 유틸리티
 │   │   ├── config/default.yaml        #     기본 설정
@@ -113,7 +126,9 @@ teleop_dev/
 │   │   │   ├── admittance_layer.py    #       F/T → 변위 보정
 │   │   │   ├── safety_monitor.py      #       4단계 안전 (E-Stop, 워크스페이스, 속도, 타임아웃)
 │   │   │   ├── teleop_config.py       #       YAML 설정 로더 (dataclass)
-│   │   │   ├── config/default.yaml    #       기본 설정
+│   │   │   ├── config/default.yaml    #       기본 설정 (단일팔 — 기존 플로우)
+│   │   │   ├── config/right.yaml      #       dual: 오른팔 (9871, 192.168.0.2)
+│   │   │   ├── config/left.yaml       #       dual: 왼팔 (9875, IP 미정 — 보수 안전값)
 │   │   │   └── docs/                  #       이론, 설정 가이드, 매뉴얼
 │   │   ├── impedance/                 #     모드: 임피던스 (URScript PD 토크 500Hz)
 │   │   │   ├── main.py                #       엔트리포인트, 듀얼 루프 디스패치
@@ -144,11 +159,23 @@ teleop_dev/
 │       └── main.py                    #     python3 -m robot.cam.main
 │
 ├── scripts/                           # entry-point 스크립트
-│   ├── run_xr_teleop.py               #   XR 통합 launcher (arm + hand 동시, BridgePoseStore 공유)
+│   ├── run_xr_teleop.py               #   XR 단일팔+단일손 (기존 플로우, 변경 없음)
+│   ├── run_xr_dual_teleop.py          #   XR 양팔+양손 (팔별 remap/포트, 키 broadcast)
+│   ├── config/xr_dual.yaml            #   dual 설정 (팔별 scale/remap/workspace, 손별 포트)
 │   └── xr_pose_diag.py                #   XR pose-only diagnostic (mean_freq / lost / recovery / jitter)
 │
+├── launcher/                          # 통합 실행기 (self-contained — teleop_dev import 없음)
+│   ├── config.py / process.py         #   yaml 컴포넌트 정의 + subprocess 생명주기
+│   ├── manager.py                     #   LocalManager (위상 정렬 start_all/stop_all)
+│   ├── agent.py / agent_client.py     #   robot PC HTTP 데몬 + 원격 클라이언트
+│   ├── gui.py                         #   tkinter GUI (로컬 + 원격 통합 관리)
+│   └── config/teleop_system.yaml      #   전체 시스템 정의 (IP/포트/커맨드 단일 소스)
+│
 ├── docs/                              # 문서
+│   ├── USER_GUIDE_ko.md               #   ★ 최상위 사용자 가이드 (Galaxy XR 메인)
 │   ├── ARCHITECTURE.md                #   이 파일
+│   ├── launcher_guide_ko.md           #   통합 런처 사용 가이드
+│   ├── xr_dual_arm_left_tuning_ko.md  #   왼팔 좌표계 튜닝/트러블슈팅
 │   ├── setup_guide.md                 #   conda env / Docker / 의존성 설치
 │   ├── arm_input_guide.md             #   Vive / keyboard / joystick 사용 가이드
 │   ├── hand_manus_guide.md            #   Manus glove / RealSense 사용 가이드
@@ -227,9 +254,19 @@ D405 컬러 영상 스트리밍. 방향이 다른 프로토콜과 반대 (Robot 
 
 ## 실행 명령
 
+> 전체 시스템은 통합 런처로 한 번에: robot PC `python3 -m launcher agent`,
+> 조종 PC `python3 -m launcher gui --profile operator`
+> ([docs/launcher_guide_ko.md](launcher_guide_ko.md)). 아래는 개별/수동 실행.
+
 ### 조종 PC (Operator)
 
 ```bash
+# Galaxy XR / Quest 3 → 양팔 + 양손 (dual)
+python3 -m scripts.run_xr_dual_teleop --config scripts/config/xr_dual.yaml --target-ip 10.0.0.5
+
+# Galaxy XR / Quest 3 → 단일팔 + 단일손 (기존 플로우)
+python3 -m scripts.run_xr_teleop --target-ip 10.0.0.5 --scale 0.3
+
 # Vive 트래커 → 팔 teleop
 python3 -m sender.arm.vive_sender --target-ip 10.0.0.5
 
@@ -239,13 +276,8 @@ python3 -m sender.arm.keyboard_sender --target-ip 10.0.0.5
 # Manus 글러브 → 손 teleop
 python3 -m sender.hand.manus_sender --target-ip 10.0.0.5
 
-# Galaxy XR / Quest 3 → 팔 + 손 teleop (통합)
-python3 -m scripts.run_xr_teleop --target-ip 10.0.0.5 --scale 0.3
-
-# Galaxy XR / Quest 3 → 팔만
+# Galaxy XR / Quest 3 → 팔만 / 손만
 python3 -m sender.arm.xr_sender --target-ip 10.0.0.5 --scale 0.3
-
-# Galaxy XR / Quest 3 → 손만
 python3 -m sender.hand.xr_hand_sender --target-ip 10.0.0.5
 
 # 카메라 수신 + 브라우저/VR 서빙 (브라우저: http://localhost:8014/)
@@ -255,17 +287,24 @@ python3 -m sender.cam.main --robot-ip 10.0.0.5
 ### 로봇 PC (AGX Orin)
 
 ```bash
-# 팔: 어드미턴스 모드 (네트워크 입력)
+# 팔: 어드미턴스 모드 — dual (팔별 config: IP/포트/안전한계)
+python3 -m robot.arm.admittance.main --mode rtde --input unified \
+    --config robot/arm/admittance/config/right.yaml
+python3 -m robot.arm.admittance.main --mode rtde --input unified \
+    --config robot/arm/admittance/config/left.yaml
+
+# 팔: 어드미턴스 모드 — 단일팔 (기존 플로우)
 python3 -m robot.arm.admittance.main --mode rtde --input unified --robot-ip 192.168.0.2
 
-# 팔: 임피던스 모드 (네트워크 입력, PolyScope 5.23.0+ 필수)
+# 팔: 임피던스 모드 (네트워크 입력, PolyScope 5.23.0+ 필수. --unified-port 로 팔별 포트)
 python3 -m robot.arm.impedance.main --mode rtde --input unified --robot-ip 192.168.0.2
 
 # 팔: 단순 servo (로컬 키보드, 네트워크 불필요)
 python3 -m robot.arm.servo.keyboard_cartesian --mode sim
 
-# 손: Manus 수신 → DG5F 제어
-python3 -m robot.hand.receiver --hand-ip 169.254.186.72
+# 손: UDP 수신 → dg5f_driver (좌/우 포트 분리, hand 불일치 패킷 드롭)
+python3 -m robot.hand.receiver --hand right --port 9872
+python3 -m robot.hand.receiver --hand left  --port 9874
 
 # 카메라: D405 1~3대 컬러 스트리밍 (ZMQ PUB 9873)
 python3 -m robot.cam.list_cameras          # 시리얼 확인
