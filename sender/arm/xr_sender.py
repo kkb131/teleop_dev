@@ -31,6 +31,7 @@ Pipeline:
 from __future__ import annotations
 
 import argparse
+import queue
 import select
 import sys
 import termios
@@ -90,7 +91,19 @@ class XRArmSender(TeleopSenderBase):
         watchdog_timeout_s: float = 0.2,
         workspace: Optional[WorkspaceLimits] = None,
         enforce_workspace: bool = True,
+        r_remap: Optional[np.ndarray] = None,
+        key_queue: Optional["queue.Queue"] = None,
+        label: str = "",
     ):
+        """
+        r_remap : (3,3) WebXR→base_link 축 정렬 회전. None 이면 기존 기본값.
+                  팔 마운트 방향이 다른 dual-arm 에서 팔별로 지정.
+        key_queue : 지정 시 termios 대신 이 queue 에서 키를 읽음 — 여러 arm
+                  sender 를 한 process 의 background thread 로 돌릴 때
+                  (termios 는 process 당 1 소유자만 가능) main thread 가
+                  키를 broadcast 하는 용도.
+        label : 로그 prefix (예: "left" → [XRArmSender:left]). dual-arm 로그 구분.
+        """
         super().__init__(target_ip, port, hz)
         self.scale = scale
         self.convention = convention
@@ -98,6 +111,12 @@ class XRArmSender(TeleopSenderBase):
         self.no_keyboard = no_keyboard
         self.enforce_workspace = enforce_workspace
         self.workspace = workspace if workspace is not None else WorkspaceLimits()
+        self.key_queue = key_queue
+        self._tag = f"[XRArmSender:{label}]" if label else "[XRArmSender]"
+        if label:
+            # dual 모드: \r 한 줄 status 가 thread 끼리 겹치므로 plain 주기 출력
+            self._status_inline = False
+            self._status_label = label
 
         # BridgePoseStore singleton — Phase B sender 와 같은 instance 공유 가능
         self._store = BridgePoseStore(use_hand_tracking=True, port=bridge_port)
@@ -106,9 +125,9 @@ class XRArmSender(TeleopSenderBase):
         # 새 'r' 호출 시 freshness check (calibrate_now) 와 함께 stale origin
         # 캡처 방지.
         self._store.clear_state()
-        print(f"[XRArmSender] BridgePoseStore ready: http://localhost:{self._store.port}/")
+        print(f"{self._tag} BridgePoseStore ready: http://localhost:{self._store.port}/")
 
-        self._aligner = XRRelativeFrameAligner(scale=scale)
+        self._aligner = XRRelativeFrameAligner(scale=scale, r_remap=r_remap)
         self._watchdog = StoreWatchdog(self._store, timeout_s=watchdog_timeout_s)
         self._clamp_warn_count = 0
 
@@ -143,25 +162,32 @@ class XRArmSender(TeleopSenderBase):
 
     # ── device setup ──────────────────────────────────────────────────
     def _setup_device(self):
-        print("\n[XRArmSender] ─────────────────────────────────────────────")
-        print("[XRArmSender] keys:")
+        tag = self._tag
+        print(f"\n{tag} ─────────────────────────────────────────────")
+        print(f"{tag} keys:")
         print("  r       — sync 시작 또는 recalibrate (사용자 + robot origin 동시 capture)")
         print("  p       — pause / resume (resume 시 자동 recalibrate)")
         print("  c       — immediate recalibrate (pause 없이, jump 가능)")
         print("  Space   — E-Stop")
         print("  +/-     — speed (robot 측 적용)")
         print("  x / Esc — quit")
-        print("[XRArmSender] convention =", self.convention, "  scale =", self.scale)
-        print("[XRArmSender] Quest 3 / Galaxy XR Chrome → http://localhost:"
+        print(f"{tag} hand_side = {self.hand_side}  convention = {self.convention}"
+              f"  scale = {self.scale}")
+        print(f"{tag} Quest 3 / Galaxy XR Chrome → http://localhost:"
               f"{self._store.port}/ → Enter VR/AR → 손 들이밀기 → 'r' 키")
-        print("[XRArmSender] ⚠️  Chrome 창 / 헤드셋의 정면이 robot base_link 의")
-        print("[XRArmSender]    정면 (+x) 과 align 된 자세에서 'r' 을 누르세요.")
-        print("[XRArmSender]    헤드셋이 N° 회전한 자세로 'r' 을 누르면 손 motion")
-        print("[XRArmSender]    이 N° 어긋난 frame 으로 매핑돼 robot 거동이 의도와")
-        print("[XRArmSender]    회전된 채로 나옴. (xr_frame_align.py docstring 참조)")
-        print("[XRArmSender] ─────────────────────────────────────────────")
+        print(f"{tag} ⚠️  Chrome 창 / 헤드셋의 정면이 robot base_link 의")
+        print(f"{tag}    정면 (+x) 과 align 된 자세에서 'r' 을 누르세요.")
+        print(f"{tag}    헤드셋이 N° 회전한 자세로 'r' 을 누르면 손 motion")
+        print(f"{tag}    이 N° 어긋난 frame 으로 매핑돼 robot 거동이 의도와")
+        print(f"{tag}    회전된 채로 나옴. (xr_frame_align.py docstring 참조)")
+        print(f"{tag} ─────────────────────────────────────────────")
+        if self.key_queue is not None:
+            # dual 모드: main thread 의 key dispatcher 가 termios 소유.
+            # 키는 key_queue 로 수신 — _started 는 'r' 수신 시 전이.
+            print(f"{tag} key_queue 모드 — main thread 의 키 입력이 broadcast 됨")
+            return
         if self.no_keyboard:
-            print("[XRArmSender] keyboard 비활성 (no-keyboard=True). "
+            print(f"{tag} keyboard 비활성 (no-keyboard=True). "
                   "헤드셋 fresh msg 확보되면 자동 calibrate (1s 간격 재시도).")
             self._started = True
             return
@@ -174,6 +200,11 @@ class XRArmSender(TeleopSenderBase):
             self._old_settings = None
 
     def _read_key(self) -> Optional[str]:
+        if self.key_queue is not None:
+            try:
+                return self.key_queue.get_nowait()
+            except queue.Empty:
+                return None
         if self.no_keyboard:
             return None
         if select.select([sys.stdin], [], [], 0)[0]:
@@ -219,19 +250,19 @@ class XRArmSender(TeleopSenderBase):
             elif key == "p":
                 self._paused = not self._paused
                 if self._paused:
-                    print(f"\n[XRArmSender] ⏸  PAUSED — robot 명령 유지. 손 새 위치로 옮긴 후 'p' 다시 누르면 resume + 자동 recalibrate.")
+                    print(f"\n{self._tag} ⏸  PAUSED — robot 명령 유지. 손 새 위치로 옮긴 후 'p' 다시 누르면 resume + 자동 recalibrate.")
                 else:
-                    print(f"\n[XRArmSender] ▶  RESUMED — recalibrate.")
+                    print(f"\n{self._tag} ▶  RESUMED — recalibrate.")
                     self._calibrate_now(label="p resume")
                     self._started = True
             elif key in ("+", "="):
                 self._speed_idx = min(self._speed_idx + 1, len(self._speed_presets) - 1)
                 buttons.speed_up = True
-                print(f"\n[XRArmSender] speed = x{self.speed_scale:.1f}")
+                print(f"\n{self._tag} speed = x{self.speed_scale:.1f}")
             elif key == "-":
                 self._speed_idx = max(self._speed_idx - 1, 0)
                 buttons.speed_down = True
-                print(f"\n[XRArmSender] speed = x{self.speed_scale:.1f}")
+                print(f"\n{self._tag} speed = x{self.speed_scale:.1f}")
 
         # 2) target pose 계산
         if not self._started or self._paused:
@@ -245,7 +276,7 @@ class XRArmSender(TeleopSenderBase):
         if not self._watchdog.fresh():
             if self._watchdog.stale_count in (1, 30, 300):  # 1회 / 0.6s / 6s
                 print(
-                    f"\n[XRArmSender] WARN: BridgePoseStore stale (count={self._watchdog.stale_count})"
+                    f"\n{self._tag} WARN: BridgePoseStore stale (count={self._watchdog.stale_count})"
                     " — virtual_pose 유지, robot 명령 freeze"
                 )
             result.buttons = buttons
@@ -264,10 +295,7 @@ class XRArmSender(TeleopSenderBase):
             result.buttons = buttons
             return result
 
-        if self.hand_side == "right":
-            user_pose = self._store.right_arm_pose
-        else:
-            user_pose = self._store.left_arm_pose
+        user_pose = self._user_pose()
 
         target_pos, target_quat = self._aligner.apply(user_pose)
 
@@ -279,7 +307,7 @@ class XRArmSender(TeleopSenderBase):
                 self._clamp_warn_count += 1
                 if self._clamp_warn_count in (1, 30, 300):
                     print(
-                        f"\n[XRArmSender] WARN: target pos {target_pos} → clamped {clamped}"
+                        f"\n{self._tag} WARN: target pos {target_pos} → clamped {clamped}"
                         f" (count={self._clamp_warn_count})"
                     )
                 target_pos = clamped
@@ -302,18 +330,18 @@ class XRArmSender(TeleopSenderBase):
         stats = self._store.get_stats()
         last_msg_time = stats.get("last_msg_time", 0.0)
         if last_msg_time <= 0.0:
-            print(f"\n[XRArmSender] WARN: 헤드셋 ws msg 없음 — 헤드셋 사이트 접속 + Enter VR/AR + 손 들이밀고 '{label}' 재시도")
+            print(f"\n{self._tag} WARN: 헤드셋 ws msg 없음 — 헤드셋 사이트 접속 + Enter VR/AR + 손 들이밀고 '{label}' 재시도")
             return
         if last_msg_time < self._sender_start_time:
             print(
-                f"\n[XRArmSender] WARN: BridgePoseStore msg 가 sender 시작 시각보다 오래됨 "
+                f"\n{self._tag} WARN: BridgePoseStore msg 가 sender 시작 시각보다 오래됨 "
                 f"(stale). 헤드셋 사이트 새로고침 후 '{label}' 재시도"
             )
             return
         age = time.perf_counter() - last_msg_time
         if age > 0.5:
             print(
-                f"\n[XRArmSender] WARN: 마지막 msg age={age:.2f}s > 0.5s — 헤드셋 연결 stale."
+                f"\n{self._tag} WARN: 마지막 msg age={age:.2f}s > 0.5s — 헤드셋 연결 stale."
                 f" 손 들이밀어 fresh data 확보 후 '{label}' 재시도"
             )
             return
@@ -326,17 +354,14 @@ class XRArmSender(TeleopSenderBase):
         self._sock.setblocking(was_blocking)
 
         # 3) user origin
-        if self.hand_side == "right":
-            user_pose = self._store.right_arm_pose
-        else:
-            user_pose = self._store.left_arm_pose
+        user_pose = self._user_pose()
 
         if not _is_valid_pose(user_pose):
-            print(f"\n[XRArmSender] WARN: user wrist pose 가 아직 invalid — 손 시야 안 들이밀고 '{label}' 재시도")
+            print(f"\n{self._tag} WARN: user wrist pose 가 아직 invalid — 손 시야 안 들이밀고 '{label}' 재시도")
             return
 
         # 4) aligner 캘리브레이션
-        print(f"\n[XRArmSender] calibrate ({label})")
+        print(f"\n{self._tag} calibrate ({label})")
         self._aligner.calibrate(user_pose, robot_pos, robot_quat)
         # virtual = origin 으로 set (jump 회피)
         self._virtual_pos = robot_pos.copy()

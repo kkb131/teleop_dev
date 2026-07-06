@@ -60,14 +60,54 @@ from typing import Optional, Tuple
 import numpy as np
 
 
-# WebXR → robot base_link 좌표축 정렬 (사용자 실측 매핑, R_x(+90°)).
+# WebXR → robot base_link 좌표축 정렬 기본값 (사용자 실측 매핑, R_x(+90°)).
 # 손 +x (오른쪽) → robot +x, 손 +y (위) → robot +z, 손 +z (뒤) → robot -y.
 # 위치 delta 와 회전 delta 양쪽에 일관 적용 (rotation 은 R @ R_delta @ R.T conjugation).
-_R_REMAP = np.array([
+# 팔이 여러 개이고 마운트 방향이 다르면 (미러/각도 장착) 팔마다 다른 remap 이
+# 필요 — XRRelativeFrameAligner(r_remap=...) 생성자 인자로 팔별 지정.
+_DEFAULT_R_REMAP = np.array([
     [ 1.0,  0.0,  0.0],
     [ 0.0,  0.0, -1.0],
     [ 0.0,  1.0,  0.0],
 ], dtype=np.float64)
+
+
+def remap_from_rpy_deg(roll: float, pitch: float, yaw: float) -> np.ndarray:
+    """RPY (deg, extrinsic XYZ: R = Rz @ Ry @ Rx) → remap 회전 행렬.
+
+    기존 검증된 기본 매핑 == remap_from_rpy_deg(90, 0, 0).
+    미러(대면) 장착 팔의 대표 시작값 == remap_from_rpy_deg(90, 0, 180).
+    """
+    r, p, y = math.radians(roll), math.radians(pitch), math.radians(yaw)
+    cr, sr = math.cos(r), math.sin(r)
+    cp, sp = math.cos(p), math.sin(p)
+    cy, sy = math.cos(y), math.sin(y)
+    Rx = np.array([[1, 0, 0], [0, cr, -sr], [0, sr, cr]], dtype=np.float64)
+    Ry = np.array([[cp, 0, sp], [0, 1, 0], [-sp, 0, cp]], dtype=np.float64)
+    Rz = np.array([[cy, -sy, 0], [sy, cy, 0], [0, 0, 1]], dtype=np.float64)
+    R = Rz @ Ry @ Rx
+    # -0.0 / 1e-17 노이즈 제거 (yaml 로 왕복해도 깨끗한 행렬 유지)
+    R[np.abs(R) < 1e-12] = 0.0
+    return R
+
+
+def validate_remap(R: np.ndarray) -> np.ndarray:
+    """remap 행렬 검증: (3,3) proper rotation (R Rᵀ = I, det = +1).
+
+    det = -1 (reflection) 행렬은 겉보기엔 그럴듯하지만 회전 conjugation 시
+    좌우계가 뒤집혀 EE 회전이 반대로 나오므로 명시적으로 거부.
+    """
+    R = np.asarray(R, dtype=np.float64)
+    if R.shape != (3, 3):
+        raise ValueError(f"remap 행렬 shape {R.shape} != (3, 3)")
+    if not np.allclose(R @ R.T, np.eye(3), atol=1e-6):
+        raise ValueError("remap 행렬이 직교 행렬이 아님 (R @ R.T != I)")
+    if np.linalg.det(R) < 0.0:
+        raise ValueError(
+            "remap 행렬 det = -1 (reflection). 미러 장착이라도 remap 은 "
+            "proper rotation (det=+1) 이어야 함 — yaw 180° 회전 등으로 표현"
+        )
+    return R
 
 
 @dataclass
@@ -88,8 +128,21 @@ class XRRelativeFrameAligner:
     캘리브레이션 전에 apply() 호출하면 robot origin 그대로 반환 (안전 hold).
     """
 
-    def __init__(self, scale: float = 1.0):
+    def __init__(self, scale: float = 1.0, r_remap: Optional[np.ndarray] = None):
+        """
+        Parameters
+        ----------
+        scale : float
+            position delta 배율 (rotation 은 항상 1:1).
+        r_remap : Optional[np.ndarray]
+            (3,3) WebXR → robot base_link 축 정렬 회전. None 이면 기존 검증
+            기본값 R_x(+90°). 팔 마운트 방향이 다르면 팔별로 다르게 지정
+            (remap_from_rpy_deg 헬퍼 참조).
+        """
         self.scale = scale
+        self._r_remap = (
+            _DEFAULT_R_REMAP if r_remap is None else validate_remap(r_remap)
+        )
         self._origin: Optional[FrameOrigin] = None
         self._last_target_pos: Optional[np.ndarray] = None
         self._last_target_quat: Optional[np.ndarray] = None
@@ -157,7 +210,7 @@ class XRRelativeFrameAligner:
         curr_p = user_pose[:3, 3]
         origin_p = self._origin.user_pose[:3, 3]
         webxr_delta_p = (curr_p - origin_p) * self.scale
-        delta_p = _R_REMAP @ webxr_delta_p
+        delta_p = self._r_remap @ webxr_delta_p
         target_pos = self._origin.robot_pos + delta_p
 
         # delta rotation: R_delta = curr_user_R @ origin_user_R^T (in WebXR frame)
@@ -167,7 +220,7 @@ class XRRelativeFrameAligner:
 
         # WebXR-frame R_delta → robot-frame R_delta via conjugation
         # (consistent with translation remap, so EE rotates intuitively too).
-        R_delta = _R_REMAP @ R_delta_webxr @ _R_REMAP.T
+        R_delta = self._r_remap @ R_delta_webxr @ self._r_remap.T
 
         # target_R = R_delta @ origin_robot_R
         origin_robot_R = _quat_wxyz_to_rotmat(self._origin.robot_quat)

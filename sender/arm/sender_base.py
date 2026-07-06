@@ -64,6 +64,13 @@ class TeleopSenderBase(ABC):
         self._virtual_pos: Optional[np.ndarray] = None
         self._virtual_quat: Optional[np.ndarray] = None  # wxyz
 
+        # status 출력 모드: True 면 \r 한 줄 덮어쓰기 (단독 실행),
+        # False 면 ~2s 주기 plain 줄 출력 (한 process 에 sender 여러 개 —
+        # \r 출력이 thread 끼리 겹치는 것 방지). subclass 가 설정.
+        self._status_inline = True
+        self._status_label = ""
+        self._last_status_time = 0.0
+
     # ------------------------------------------------------------------
     # Pose query
     # ------------------------------------------------------------------
@@ -209,12 +216,23 @@ class TeleopSenderBase(ABC):
                 self._send_packet(result.buttons)
 
                 send_count += 1
-                # Real-time single-line status (overwrite with \r)
                 p = self._virtual_pos
-                print(f"\r[Sender] #{send_count:>7d}  "
-                      f"pos=[{p[0]:+.3f}, {p[1]:+.3f}, {p[2]:+.3f}]  "
-                      f"spd={self._get_speed_label()}",
-                      end="", flush=True)
+                if self._status_inline:
+                    # Real-time single-line status (overwrite with \r)
+                    print(f"\r[Sender] #{send_count:>7d}  "
+                          f"pos=[{p[0]:+.3f}, {p[1]:+.3f}, {p[2]:+.3f}]  "
+                          f"spd={self._get_speed_label()}",
+                          end="", flush=True)
+                else:
+                    # Multi-sender process: plain 줄을 ~2s 주기로만 출력
+                    now = time.perf_counter()
+                    if now - self._last_status_time >= 2.0:
+                        self._last_status_time = now
+                        lbl = f":{self._status_label}" if self._status_label else ""
+                        print(f"[Sender{lbl}] #{send_count:>7d}  "
+                              f"pos=[{p[0]:+.3f}, {p[1]:+.3f}, {p[2]:+.3f}]  "
+                              f"spd={self._get_speed_label()}",
+                              flush=True)
 
                 # Rate control
                 elapsed = time.perf_counter() - t_start
