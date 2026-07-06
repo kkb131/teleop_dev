@@ -35,3 +35,14 @@ render:
   plane_distance_m: 1.0
   plane_width_m: 1.6
   plane_height_m: 0.9
+
+cam:
+  # sender/cam (python3 -m sender.cam.main) 의 HTTP/WS 서버 위치.
+  # enabled=true 면 webxr_to_pose 가 http://<host>:<http_port>/config 를 fetch 후
+  # ws://<host>:<http_port>/ws 로 JPEG 프레임을 수신해 plane 렌더링.
+  # plane 크기/배치/고정모드는 sender/cam/config.yaml 의 vr 섹션에서 설정.
+  # 헤드셋 USB 모드: adb reverse tcp:8014 tcp:8014 추가 필요 (8013 과 별개).
+  # URL 쿼리 override: ?cam_off=1 ?cam_host= ?cam_port= ?cam_mode=
+  enabled: false
+  host: localhost
+  http_port: 8014

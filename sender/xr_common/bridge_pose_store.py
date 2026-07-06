@@ -70,6 +70,11 @@ _DEFAULT_CONFIG = {
         "plane_width_m": 1.6,
         "plane_height_m": 0.9,
     },
+    "cam": {
+        "enabled": False,   # sender/cam 서버 (python3 -m sender.cam.main) 연동
+        "host": "localhost",
+        "http_port": 8014,
+    },
 }
 
 
@@ -243,9 +248,17 @@ class BridgePoseStore:
             print(f"[BridgePoseStore] ready: http://localhost:{self._port}/  "
                   f"(WS: /pose)")
             print(f"[BridgePoseStore] adb reverse tcp:{self._port} tcp:{self._port} 필요")
-            if not CONFIG.get("webrtc", {}).get("enabled", False):
-                print("[BridgePoseStore] webrtc.enabled=false — 영상 plane 비활성 "
-                      "(현재 로봇 PC 가 카메라 publisher 미제공. 추후 WebRTC 구현 예정)")
+            cam_cfg = CONFIG.get("cam", {})
+            if cam_cfg.get("enabled", False):
+                cam_port = cam_cfg.get("http_port", 8014)
+                print(f"[BridgePoseStore] cam.enabled=true — webxr_to_pose 가 "
+                      f"{cam_cfg.get('host', 'localhost')}:{cam_port} (sender.cam) "
+                      f"에서 영상 수신. USB 모드: adb reverse tcp:{cam_port} "
+                      f"tcp:{cam_port} 추가 필요")
+            else:
+                print("[BridgePoseStore] cam.enabled=false — 영상 plane 비활성. "
+                      "활성화: robot PC 에서 robot.cam.main + 조종 PC 에서 "
+                      "sender.cam.main 실행 후 config.yaml cam.enabled=true")
 
     # ── ws server (aiohttp on thread) ──────────────────────────────────
     def _server_thread_main(self) -> None:

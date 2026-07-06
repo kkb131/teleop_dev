@@ -38,8 +38,8 @@
 <body>
 <main>
   <h1>WebXR pose stream → teleop_dev ws bridge</h1>
-  <p class="muted">XR-RAF onFrame 에서 매 frame head/hand pose JSON 송신 (ws). teleop_dev sender (arm + hand) 가 이 ws 의 shared array 를 읽어 UDP 로 로봇 PC 에 송신. 영상 통합은 추후 WebRTC 기능 추가 시 활성 (현재 비활성 default).</p>
-  <p class="muted">URL 쿼리: <code>?webrtc_off=1</code> 영상 강제 비활성, <code>?webrtc_port=60001</code> head 카메라 포트, <code>?webrtc_host=192.168.0.10</code> 카메라 publisher host.</p>
+  <p class="muted">XR-RAF onFrame 에서 매 frame head/hand pose JSON 송신 (ws). teleop_dev sender (arm + hand) 가 이 ws 의 shared array 를 읽어 UDP 로 로봇 PC 에 송신. cam.enabled=true 면 sender.cam (8014) 의 WS-JPEG 를 수신해 카메라 plane 렌더링 (1~3개, head-locked / world-locked).</p>
+  <p class="muted">URL 쿼리: <code>?cam_off=1</code> 영상 강제 비활성, <code>?cam_host=</code> / <code>?cam_port=</code> cam 서버 위치, <code>?cam_mode=head_locked|world_locked</code> 고정 모드, <code>?plane_distance=</code> / <code>?plane_width=</code> / <code>?plane_height=</code> plane 크기 override.</p>
 
   <h2>1. Auto diagnostic + WS status</h2>
   <pre id="auto">running...</pre>
@@ -52,10 +52,6 @@
   <h2>3. Live session log</h2>
   <pre id="live">(no active session)</pre>
 </main>
-
-<!-- off-screen video element — WebRTC stream sink. 비활성 시 미사용. -->
-<video id="webrtc-video" autoplay playsinline muted
-       style="position:absolute; left:-1px; top:-1px; width:1px; height:1px; opacity:0; pointer-events:none;"></video>
 
 <script>
 const $auto = document.getElementById('auto');
@@ -78,7 +74,7 @@ function liveLog(line) {
   $live.scrollTop = $live.scrollHeight;
 }
 
-// ── ws client ─────────────────────────────────────────────────────────
+// ── ws client (pose) ──────────────────────────────────────────────────
 let ws = null;
 let wsSent = 0, wsFailures = 0;
 
@@ -141,21 +137,35 @@ async function runAuto() {
 // ── 설정 로딩 (sender/xr_common/config.yaml ← BridgePoseStore /config endpoint) ─
 const URL_PARAMS = new URLSearchParams(location.search);
 let CONFIG = {
-  ws:     { port: 8013 },
-  webrtc: { enabled: false, host: 'localhost',
-            ports: { head: 60001, left_wrist: 60002, right_wrist: 60003 } },
-  render: { plane_distance_m: 1.0, plane_width_m: 1.6, plane_height_m: 0.9 },
+  ws:  { port: 8013 },
+  cam: { enabled: false, host: 'localhost', http_port: 8014 },
 };
-let WEBRTC_PORT, WEBRTC_OFF, WEBRTC_HOST;
-let PLANE_D, PLANE_W, PLANE_H;
+// cam 서버 위치 (BridgePoseStore /config 의 cam 섹션 + URL override)
+let CAM_OFF, CAM_HOST, CAM_PORT;
+// cam 서버 /config (sender/cam/config.yaml vr 섹션) 에서 받는 값
+let CAM_NAMES = [];
+let CAM_MODE = 'head_locked';
+let VR_LAYOUT = {
+  plane_distance_m: 1.0, plane_width_m: 1.06, plane_height_m: 0.8,
+  plane_height_offset_m: 0.0, yaw_deg: [0, -40, 40],
+};
 function _applyConfig() {
-  WEBRTC_PORT = parseInt(URL_PARAMS.get('webrtc_port') || String(CONFIG.webrtc.ports.head), 10);
-  // env webrtc.enabled=false 면 영상 강제 비활성 (현재 teleop_dev default).
-  WEBRTC_OFF  = URL_PARAMS.get('webrtc_off') === '1' || CONFIG.webrtc.enabled === false;
-  WEBRTC_HOST = URL_PARAMS.get('webrtc_host') || CONFIG.webrtc.host || location.hostname || 'localhost';
-  PLANE_D = parseFloat(URL_PARAMS.get('plane_distance') || String(CONFIG.render.plane_distance_m));
-  PLANE_W = parseFloat(URL_PARAMS.get('plane_width')    || String(CONFIG.render.plane_width_m));
-  PLANE_H = parseFloat(URL_PARAMS.get('plane_height')   || String(CONFIG.render.plane_height_m));
+  const camCfg = CONFIG.cam || {};
+  CAM_OFF  = URL_PARAMS.get('cam_off') === '1' || camCfg.enabled !== true;
+  CAM_HOST = URL_PARAMS.get('cam_host') || camCfg.host || location.hostname || 'localhost';
+  CAM_PORT = parseInt(URL_PARAMS.get('cam_port') || String(camCfg.http_port || 8014), 10);
+}
+function _applyCamServerConfig(c) {
+  CAM_NAMES = c.cameras || [];
+  const vr = c.vr || {};
+  VR_LAYOUT = {
+    plane_distance_m:      parseFloat(URL_PARAMS.get('plane_distance') || String(vr.plane_distance_m ?? 1.0)),
+    plane_width_m:         parseFloat(URL_PARAMS.get('plane_width')    || String(vr.plane_width_m ?? 1.06)),
+    plane_height_m:        parseFloat(URL_PARAMS.get('plane_height')   || String(vr.plane_height_m ?? 0.8)),
+    plane_height_offset_m: parseFloat(String(vr.plane_height_offset_m ?? 0.0)),
+    yaw_deg:               vr.yaw_deg || [0, -40, 40],
+  };
+  CAM_MODE = URL_PARAMS.get('cam_mode') || vr.mode || 'head_locked';
 }
 _applyConfig();
 fetch('/config')
@@ -163,71 +173,135 @@ fetch('/config')
   .then(cfg => {
     if (cfg) {
       CONFIG = cfg; _applyConfig();
-      const state = WEBRTC_OFF ? 'OFF (pose-only)' : `${WEBRTC_HOST}:${WEBRTC_PORT}`;
-      autoLog(`config loaded: webrtc=${state} plane=${PLANE_D}m ${PLANE_W}×${PLANE_H}m`, 'ok');
-      if (WEBRTC_OFF) autoLog('영상 plane 비활성. 헤드셋 안에선 검은 배경 + WebGL clear만 보임.', 'muted');
+      if (CAM_OFF) {
+        autoLog('config loaded: cam=OFF (pose-only)', 'ok');
+        autoLog('영상 plane 비활성. 헤드셋 안에선 검은 배경 + WebGL clear만 보임.', 'muted');
+      } else {
+        autoLog(`config loaded: cam=${CAM_HOST}:${CAM_PORT}`, 'ok');
+        _fetchCamConfig();
+      }
     }
   })
   .catch(e => autoLog('config fetch failed (using defaults): ' + e.message, 'warn'));
 
-const videoEl = document.getElementById('webrtc-video');
-let pc = null;
-let pcTrackBound = false;
-
-async function _connectWebRTC() {
-  if (WEBRTC_OFF) { liveLog('webrtc: disabled (config.webrtc.enabled=false)'); return; }
-  if (pc) { try { pc.close(); } catch (e) {} pc = null; }
-  pc = new RTCPeerConnection({ iceServers: [] });
-  pc.addTransceiver('video', { direction: 'recvonly' });
-  pc.ontrack = (event) => {
-    pcTrackBound = true;
-    liveLog(`webrtc ontrack: kind=${event.track.kind}`);
-    try { event.track.contentHint = 'motion'; } catch (e) {}
-    try {
-      if (event.receiver && 'playoutDelayHint' in event.receiver) {
-        event.receiver.playoutDelayHint = 0;
-        liveLog('webrtc receiver.playoutDelayHint=0');
-      }
-    } catch (e) {}
-    videoEl.srcObject = event.streams[0];
-    videoEl.play().catch(e => liveLog('video.play() error: ' + e.message));
-  };
-  pc.oniceconnectionstatechange = () => liveLog(`webrtc ice: ${pc.iceConnectionState}`);
-  pc.onconnectionstatechange    = () => liveLog(`webrtc pc:  ${pc.connectionState}`);
-
-  const url = `https://${WEBRTC_HOST}:${WEBRTC_PORT}/offer`;
-  try {
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    liveLog(`webrtc POST ${url}`);
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sdp: pc.localDescription.sdp, type: pc.localDescription.type }),
+function _fetchCamConfig() {
+  // cross-origin fetch (이 페이지 origin 은 8013) — cam 서버가 CORS 헤더 제공
+  fetch(`http://${CAM_HOST}:${CAM_PORT}/config`)
+    .then(r => r.ok ? r.json() : Promise.reject(new Error('status ' + r.status)))
+    .then(c => {
+      _applyCamServerConfig(c);
+      autoLog(`cam config loaded: ${CAM_NAMES.length} cams [${CAM_NAMES.join(', ')}] ` +
+              `mode=${CAM_MODE} plane=${VR_LAYOUT.plane_distance_m}m ` +
+              `${VR_LAYOUT.plane_width_m}×${VR_LAYOUT.plane_height_m}m`, 'ok');
+      _connectCamWS();
+    })
+    .catch(e => {
+      autoLog(`cam config fetch FAIL: ${e.message}`, 'fail');
+      autoLog(`→ sender.cam 실행 + adb reverse tcp:${CAM_PORT} tcp:${CAM_PORT} 확인`, 'warn');
     });
-    if (!resp.ok) { liveLog(`webrtc /offer status=${resp.status}`); return; }
-    const answer = await resp.json();
-    await pc.setRemoteDescription(answer);
-    liveLog('webrtc setRemoteDescription OK');
-  } catch (e) {
-    liveLog(`webrtc FAIL: ${e.name} — ${e.message}`);
-    liveLog(`  → ${url} cert을 헤드셋 Chrome에서 한 번 신뢰했는지 확인`);
+}
+
+// ── cam WS client — WS binary 포맷은 protocol/cam_protocol.py 참조 ─────
+//   byte 0: u8 version | byte 1: u8 cam index | bytes 2-3: u16 LE seq
+//   bytes 4-11: f64 LE capture ts (epoch s) | bytes 12+: JPEG
+const CAM_WS_HEADER_SIZE = 12;
+let camWS = null;
+let camRecv = 0;             // 초당 수신 프레임 (진단용)
+// 카메라별 디코드 상태: decode in-flight 1개 + pending 덮어쓰기 (중간 프레임 drop)
+let camSlots = [];           // {bitmap, dirty, decoding, pending, frames}
+
+function _initCamSlots() {
+  camSlots = CAM_NAMES.map(() => ({
+    bitmap: null, dirty: false, decoding: false, pending: null, frames: 0,
+  }));
+}
+
+function _connectCamWS() {
+  if (CAM_OFF) return;
+  _initCamSlots();
+  const url = `ws://${CAM_HOST}:${CAM_PORT}/ws`;
+  camWS = new WebSocket(url);
+  camWS.binaryType = 'arraybuffer';
+  camWS.onopen = () => { liveLog(`cam ws open: ${url}`); autoLog(`cam ws open: ${url}`, 'ok'); };
+  camWS.onclose = () => {
+    liveLog('cam ws closed; reconnect in 1s');
+    setTimeout(() => { if (!CAM_OFF) _connectCamWS(); }, 1000);
+  };
+  camWS.onmessage = (ev) => {
+    if (typeof ev.data === 'string') {
+      try {
+        const m = JSON.parse(ev.data);
+        if (m.type === 'recenter') { anchorMatrix = null; liveLog('cam recenter — anchor 재캡처'); }
+      } catch (e) {}
+      return;
+    }
+    const dv = new DataView(ev.data);
+    if (dv.getUint8(0) !== 1) return;   // protocol version
+    const camIndex = dv.getUint8(1);
+    const slot = camSlots[camIndex];
+    if (!slot) return;
+    camRecv++;
+    _decodeCamFrame(slot, ev.data.slice(CAM_WS_HEADER_SIZE));
+  };
+}
+
+function _decodeCamFrame(slot, jpegBuf) {
+  if (slot.decoding) { slot.pending = jpegBuf; return; }
+  slot.decoding = true;
+  // TODO: createImageBitmap 미지원 브라우저 폴백 (Image + object URL) — Galaxy XR
+  // Chrome 은 지원 확인됨.
+  createImageBitmap(new Blob([jpegBuf], { type: 'image/jpeg' }))
+    .then(bitmap => {
+      if (slot.bitmap) slot.bitmap.close();
+      slot.bitmap = bitmap;
+      slot.dirty = true;
+      slot.frames++;
+    })
+    .catch(() => {})   // 손상 JPEG 1프레임 skip
+    .finally(() => {
+      slot.decoding = false;
+      if (slot.pending) { const p = slot.pending; slot.pending = null; _decodeCamFrame(slot, p); }
+    });
+}
+
+// ── mat4 helpers (column-major, WebXR/WebGL 관례) ─────────────────────
+function mat4Identity() {
+  return new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
+}
+function mat4Multiply(a, b) {   // returns a·b
+  const out = new Float32Array(16);
+  for (let c = 0; c < 4; c++) {
+    for (let r = 0; r < 4; r++) {
+      out[c*4+r] = a[r]*b[c*4] + a[4+r]*b[c*4+1] + a[8+r]*b[c*4+2] + a[12+r]*b[c*4+3];
+    }
   }
+  return out;
+}
+function mat4RotY(rad) {
+  const c = Math.cos(rad), s = Math.sin(rad);
+  return new Float32Array([c,0,-s,0, 0,1,0,0, s,0,c,0, 0,0,0,1]);
+}
+function mat4Translate(x, y, z) {
+  return new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, x,y,z,1]);
+}
+function mat4Scale(x, y, z) {
+  return new Float32Array([x,0,0,0, 0,y,0,0, 0,0,z,0, 0,0,0,1]);
+}
+// viewer pose 에서 yaw(Y축 회전) + position 만 추출 — world_locked anchor 용.
+// 중력 정렬이라 plane 이 기울지 않는다. yaw = atan2(m[8], m[10]) (−Z가 시선).
+function yawOnlyFromPose(m) {
+  const yaw = Math.atan2(m[8], m[10]);
+  return mat4Multiply(mat4Translate(m[12], m[13], m[14]), mat4RotY(yaw));
 }
 
-function _disconnectWebRTC() {
-  if (pc) { try { pc.close(); } catch(e) {} pc = null; }
-  if (videoEl) videoEl.srcObject = null;
-  pcTrackBound = false;
-}
-
-// ── WebGL render resources — webrtc enabled 시에만 사용 ───────────────
+// ── WebGL render resources — cam enabled 시에만 사용 ──────────────────
 let shaderProgram = null;
 let attrPos = -1, attrUv = -1;
 let uniformProj = null, uniformView = null, uniformModel = null, uniformTex = null;
 let quadBuffer = null;
-let videoTexture = null;
-let videoTexW = 0, videoTexH = 0;
+let camTextures = [];        // 카메라별 {texture, texW, texH}
+let camPlacements = [];      // 카메라별 placement mat4
+let anchorMatrix = null;     // world_locked anchor (첫 유효 viewerPose 에서 캡처)
 
 function _initRenderResources() {
   if (shaderProgram) return;
@@ -276,49 +350,67 @@ void main() {
   uniformModel = gl.getUniformLocation(shaderProgram, 'u_model');
   uniformTex   = gl.getUniformLocation(shaderProgram, 'u_tex');
 
-  const D = -PLANE_D;
-  const W = PLANE_W / 2, H = PLANE_H / 2;
+  // 단위 quad (±0.5, z=0) 를 모든 plane 이 공유 — 크기/배치는 model matrix 로.
   const verts = new Float32Array([
-    -W, -H, D,     0.0, 1.0,
-     W, -H, D,     1.0, 1.0,
-    -W,  H, D,     0.0, 0.0,
-     W,  H, D,     1.0, 0.0,
+    -0.5, -0.5, 0,     0.0, 1.0,
+     0.5, -0.5, 0,     1.0, 1.0,
+    -0.5,  0.5, 0,     0.0, 0.0,
+     0.5,  0.5, 0,     1.0, 0.0,
   ]);
   quadBuffer = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
   gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
 
-  videoTexture = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, videoTexture);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  camTextures = CAM_NAMES.map(() => {
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    return { texture: tex, texW: 0, texH: 0 };
+  });
 
-  liveLog('webgl render resources initialized');
+  // placement[i] = RotY(yaw_i)·Translate(0, h_off, −dist)·Scale(w, h, 1)
+  // — anchor(또는 머리) 를 중심으로 yaw_deg 각도에 plane 배치.
+  camPlacements = CAM_NAMES.map((_, i) => {
+    const yawRad = (VR_LAYOUT.yaw_deg[i] || 0) * Math.PI / 180.0;
+    return mat4Multiply(
+      mat4RotY(yawRad),
+      mat4Multiply(
+        mat4Translate(0, VR_LAYOUT.plane_height_offset_m, -VR_LAYOUT.plane_distance_m),
+        mat4Scale(VR_LAYOUT.plane_width_m, VR_LAYOUT.plane_height_m, 1),
+      ),
+    );
+  });
+
+  liveLog(`webgl render resources initialized (${CAM_NAMES.length} planes, mode=${CAM_MODE})`);
 }
 
-function _uploadVideoFrame() {
-  if (!videoEl || videoEl.readyState < 2) return;
-  _initRenderResources();
-  gl.bindTexture(gl.TEXTURE_2D, videoTexture);
-  if (videoEl.videoWidth !== videoTexW || videoEl.videoHeight !== videoTexH) {
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, videoEl);
-    videoTexW = videoEl.videoWidth;
-    videoTexH = videoEl.videoHeight;
+function _uploadCamFrame(i) {
+  const slot = camSlots[i];
+  const ct = camTextures[i];
+  if (!slot || !slot.dirty || !slot.bitmap || !ct) return;
+  gl.bindTexture(gl.TEXTURE_2D, ct.texture);
+  if (slot.bitmap.width !== ct.texW || slot.bitmap.height !== ct.texH) {
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, slot.bitmap);
+    ct.texW = slot.bitmap.width;
+    ct.texH = slot.bitmap.height;
   } else {
-    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, videoEl);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, slot.bitmap);
   }
+  slot.dirty = false;
 }
 
-function _drawVideoPlane(view, modelMatrix) {
-  if (!videoEl || videoEl.readyState < 2) return;
+function _drawCamPlane(view, i, modelMatrix) {
+  const ct = camTextures[i];
+  if (!ct || ct.texW === 0) return;   // 아직 프레임 없음
   gl.useProgram(shaderProgram);
   gl.uniformMatrix4fv(uniformProj,  false, view.projectionMatrix);
   gl.uniformMatrix4fv(uniformView,  false, view.transform.inverse.matrix);
   gl.uniformMatrix4fv(uniformModel, false, modelMatrix);
   gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D, videoTexture);
+  gl.bindTexture(gl.TEXTURE_2D, ct.texture);
   gl.uniform1i(uniformTex, 0);
 
   gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
@@ -366,9 +458,8 @@ async function startSession(mode) {
     });
     xrSession.addEventListener('end', () => {
       liveLog(`session ended (frames=${frameCount} ws.sent=${wsSent} ws.failures=${wsFailures})`);
-      _disconnectWebRTC();
-      shaderProgram = null; quadBuffer = null; videoTexture = null;
-      videoTexW = 0; videoTexH = 0;
+      shaderProgram = null; quadBuffer = null;
+      camTextures = []; camPlacements = []; anchorMatrix = null;
       xrSession = null; xrRefSpace = null; gl = null;
       $btnVR.disabled = false; $btnAR.disabled = false;
       $btnEnd.disabled = true;
@@ -378,8 +469,7 @@ async function startSession(mode) {
     $btnVR.disabled = true; $btnAR.disabled = true; $btnEnd.disabled = false;
 
     frameCount = 0; lastFrameLog = performance.now(); wsSent = 0; wsFailures = 0;
-
-    _connectWebRTC().catch(e => liveLog('webrtc connect threw: ' + e.message));
+    anchorMatrix = null;   // world_locked: 세션마다 anchor 재캡처
 
     xrSession.requestAnimationFrame(onFrame);
   } catch (e) {
@@ -402,13 +492,29 @@ function onFrame(time, frame) {
     const m = viewerPose.transform.matrix;
     wsSend({ type: 'head', ts: time, matrix: Array.from(m) });
 
-    // webrtc enabled 일 때만 video plane render. 비활성 시 background 만 clear.
-    if (!WEBRTC_OFF) {
-      _uploadVideoFrame();
+    // cam enabled 일 때만 camera plane render. 비활성 시 background 만 clear.
+    if (!CAM_OFF && CAM_NAMES.length > 0) {
+      _initRenderResources();
+      for (let i = 0; i < CAM_NAMES.length; i++) _uploadCamFrame(i);
+
+      // head_locked: 머리를 따라옴 / world_locked: 세션 첫 pose 위치에 고정
+      let base;
+      if (CAM_MODE === 'world_locked') {
+        if (anchorMatrix === null) {
+          anchorMatrix = yawOnlyFromPose(m);
+          liveLog('world_locked anchor captured');
+        }
+        base = anchorMatrix;
+      } else {
+        base = m;
+      }
+
       for (const view of viewerPose.views) {
         const vp = layer.getViewport(view);
         gl.viewport(vp.x, vp.y, vp.width, vp.height);
-        _drawVideoPlane(view, m);
+        for (let i = 0; i < CAM_NAMES.length; i++) {
+          _drawCamPlane(view, i, mat4Multiply(base, camPlacements[i]));
+        }
       }
     }
   }
@@ -453,13 +559,26 @@ function onFrame(time, frame) {
   if (now - lastFrameLog > 1000) {
     const sent = wsSent; wsSent = 0;
     const fail = wsFailures; wsFailures = 0;
+    const cam = camRecv; camRecv = 0;
     lastFrameLog = now;
     liveLog(
       `xrFrame=${frameCount} ws.sent=${sent}/s ws.fail=${fail}/s ws=${wsState()} ` +
-      `hands=${curHandCount}` + (firstWristStr ? '  ' + firstWristStr : '')
+      `hands=${curHandCount}` +
+      (CAM_OFF ? '' : ` cam.recv=${cam}/s`) +
+      (firstWristStr ? '  ' + firstWristStr : '')
     );
   }
 }
+
+// 세션 밖에서도 cam 수신 상태를 진단 pane 에 1초 주기 표시 (헤드셋 없이 검증용)
+setInterval(() => {
+  if (xrSession || CAM_OFF || !camWS) return;
+  const decoded = camSlots.map(s => { const f = s.frames; s.frames = 0; return f; });
+  if (camRecv > 0 || decoded.some(f => f > 0)) {
+    liveLog(`(no session) cam.recv=${camRecv}/s decoded=[${decoded.join(', ')}]/s`);
+  }
+  camRecv = 0;
+}, 1000);
 
 $btnVR.onclick  = () => startSession('immersive-vr');
 $btnAR.onclick  = () => startSession('immersive-ar');

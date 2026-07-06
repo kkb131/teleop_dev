@@ -8,6 +8,7 @@
 #   python3 -m sender.hand.manus_sender     --target-ip <ROBOT_IP>
 #   python3 -m sender.hand.realsense_sender --target-ip <ROBOT_IP>
 #   python3 -m scripts.run_xr_teleop        --target-ip <ROBOT_IP>      # Galaxy XR / Quest 3
+#   python3 -m sender.cam.main              --robot-ip <ROBOT_IP>       # 카메라 수신 + 브라우저/VR 서빙
 #
 # Setup:
 #   conda env create -f environment.yaml
@@ -32,4 +33,5 @@ dependencies:
     - pyrealsense2          # Intel RealSense D405 (realsense_sender)
     - opencv-python         # 시각화 + BGR↔RGB (realsense_sender)
     - aiohttp>=3.8          # Galaxy XR / Quest 3 ws bridge HTTP+WS server (xr_common.bridge_pose_store)
+    - pyzmq>=25             # 로봇 PC 카메라 스트림 ZMQ SUB (sender.cam)
     - ur-rtde>=1.5.0        # sender/arm/move_to_pose.py (UR10e RTDE 직접 명령 유틸리티)

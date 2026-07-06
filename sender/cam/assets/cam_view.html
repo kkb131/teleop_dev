@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>teleop_dev cam view</title>
+<style>
+  html, body {
+    margin: 0; padding: 0;
+    background: #0a0a0a; color: #e8e8e8;
+    font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+  }
+  main { max-width: 1400px; margin: 0 auto; padding: 12px 16px 48px; }
+  h1 { font-size: 22px; margin: 4px 0 10px; color: #ffd866; }
+  #status { font-size: 14px; color: #888; margin-bottom: 10px; }
+  #grid { display: flex; flex-wrap: wrap; gap: 12px; }
+  .cell { position: relative; background: #161616; border: 1px solid #2a2a2a; border-radius: 6px; overflow: hidden; }
+  .cell canvas { display: block; max-width: 640px; width: 100%; height: auto; }
+  .cell .label {
+    position: absolute; top: 6px; left: 8px;
+    font-size: 13px; font-family: monospace;
+    background: rgba(0,0,0,.6); padding: 2px 6px; border-radius: 4px;
+    color: #a9dc76;
+  }
+  button {
+    padding: 10px 16px; margin: 0 8px 12px 0;
+    background: #1f6feb; color: white; border: 0; border-radius: 6px;
+    font-size: 15px; font-weight: 600; cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>teleop_dev cam view</h1>
+  <button id="btn-recenter">Recenter VR (world_locked anchor 재정렬)</button>
+  <div id="status">connecting...</div>
+  <div id="grid"></div>
+</main>
+
+<script>
+// WS binary 포맷: protocol/cam_protocol.py 참조
+//   byte 0: u8 version | byte 1: u8 cam index | bytes 2-3: u16 LE seq
+//   bytes 4-11: f64 LE capture ts (epoch s) | bytes 12+: JPEG
+const WS_HEADER_SIZE = 12;
+const $status = document.getElementById('status');
+const $grid = document.getElementById('grid');
+
+let CAMERAS = [];
+const cells = [];   // {canvas, ctx, label, frames, lastTs, decoding, pending}
+
+function buildGrid(cameras) {
+  $grid.innerHTML = '';
+  cells.length = 0;
+  for (const name of cameras) {
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    const canvas = document.createElement('canvas');
+    canvas.width = 640; canvas.height = 480;
+    const label = document.createElement('div');
+    label.className = 'label';
+    label.textContent = name;
+    cell.appendChild(canvas);
+    cell.appendChild(label);
+    $grid.appendChild(cell);
+    cells.push({
+      name, canvas, ctx: canvas.getContext('2d'), label,
+      frames: 0, lastTs: 0, decoding: false, pending: null,
+    });
+  }
+}
+
+async function decodeAndDraw(cell, jpegBuf, ts) {
+  // decode in-flight 1개 + pending 덮어쓰기 (느린 디코드 시 중간 프레임 drop)
+  if (cell.decoding) { cell.pending = { jpegBuf, ts }; return; }
+  cell.decoding = true;
+  try {
+    const bitmap = await createImageBitmap(new Blob([jpegBuf], { type: 'image/jpeg' }));
+    if (cell.canvas.width !== bitmap.width || cell.canvas.height !== bitmap.height) {
+      cell.canvas.width = bitmap.width;
+      cell.canvas.height = bitmap.height;
+    }
+    cell.ctx.drawImage(bitmap, 0, 0);
+    bitmap.close();
+    cell.frames++;
+    cell.lastTs = ts;
+  } catch (e) {
+    // 손상 JPEG 1프레임은 skip
+  } finally {
+    cell.decoding = false;
+    if (cell.pending) {
+      const p = cell.pending; cell.pending = null;
+      decodeAndDraw(cell, p.jpegBuf, p.ts);
+    }
+  }
+}
+
+let ws = null;
+function connectWS() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.binaryType = 'arraybuffer';
+  ws.onopen = () => { $status.textContent = 'ws connected'; };
+  ws.onclose = () => {
+    $status.textContent = 'ws closed — reconnect in 1s';
+    setTimeout(connectWS, 1000);
+  };
+  ws.onmessage = (ev) => {
+    if (typeof ev.data === 'string') return;  // recenter 등 텍스트는 VR 전용
+    const dv = new DataView(ev.data);
+    if (dv.getUint8(0) !== 1) return;         // protocol version
+    const camIndex = dv.getUint8(1);
+    const ts = dv.getFloat64(4, true);
+    const cell = cells[camIndex];
+    if (!cell) return;
+    decodeAndDraw(cell, ev.data.slice(WS_HEADER_SIZE), ts);
+  };
+}
+
+fetch('/config')
+  .then(r => r.json())
+  .then(cfg => {
+    CAMERAS = cfg.cameras;
+    buildGrid(CAMERAS);
+    $status.textContent = `cameras: ${CAMERAS.join(', ')}  vr.mode=${cfg.vr.mode}`;
+    connectWS();
+  })
+  .catch(e => { $status.textContent = 'config fetch failed: ' + e.message; });
+
+document.getElementById('btn-recenter').onclick = () => {
+  fetch('/recenter', { method: 'POST' })
+    .then(r => r.json())
+    .then(d => { $status.textContent = `recenter sent → ${d.sent} client(s)`; })
+    .catch(e => { $status.textContent = 'recenter failed: ' + e.message; });
+};
+
+// fps / latency 오버레이 (1초 주기)
+setInterval(() => {
+  const now = Date.now() / 1000;
+  for (const cell of cells) {
+    const lat = cell.lastTs > 0 ? ((now - cell.lastTs) * 1000).toFixed(0) : '-';
+    cell.label.textContent = `${cell.name}  ${cell.frames}fps  ${lat}ms`;
+    cell.frames = 0;
+  }
+}, 1000);
+</script>
+</body>
+</html>

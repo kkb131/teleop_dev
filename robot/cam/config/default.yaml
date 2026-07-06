@@ -1,0 +1,29 @@
+# robot/cam 기본 설정 — D405 컬러 스트리밍 (ZMQ PUB, JPEG)
+#
+# 사용:
+#   python3 -m robot.cam.main                      # 이 파일 사용
+#   python3 -m robot.cam.main --config <path>      # 다른 yaml
+#   python3 -m robot.cam.main --serials S1 S2      # 시리얼 직접 지정 (cameras 무시)
+#   python3 -m robot.cam.list_cameras              # 연결된 D405 시리얼 확인
+
+stream:
+  bind_host: 0.0.0.0
+  port: 9873           # operator 측 sender/cam/config.yaml zmq.port 와 일치
+  jpeg_quality: 80     # 1-100. 640x480 기준 80 ≈ 프레임당 30-60KB
+
+cameras:               # 1~3개. name 이 ZMQ topic — operator 측 cameras 리스트와 일치 필요
+  - name: head
+    serial: ""          # "" = 첫 번째 연결 장치
+    width: 640
+    height: 480
+    fps: 30
+  # - name: left_wrist
+  #   serial: "218622270123"
+  #   width: 640
+  #   height: 480
+  #   fps: 30
+  # - name: right_wrist
+  #   serial: "218622270456"
+  #   width: 640
+  #   height: 480
+  #   fps: 30

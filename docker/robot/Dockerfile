@@ -50,6 +50,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 #   ur-rtde     - UR 로봇 RTDE 통신 (servoJ + URScript socket)
 #   PyYAML      - YAML 설정 파싱
 #   numpy <2.0  - pinocchio ABI 호환
+#   pyzmq       - robot/cam D405 컬러 스트리밍 ZMQ PUB (JPEG)
+#   opencv-python-headless - JPEG 인코딩 (robot/cam, GUI 불필요)
+#   pyrealsense2 - D405 컬러 캡처 (robot/cam)
+#                 주의: 컨테이너에서 D405 접근하려면 run_container.sh 에
+#                 USB 장치 전달 필요 (예: -v /dev:/dev --device-cgroup-rule
+#                 또는 --privileged)
 #
 # 참고: DG5F 하드웨어 제어는 dg5f_driver (ROS2) 가 담당.
 # robot/hand/* 는 ROS2 토픽으로만 통신하므로 pymodbus 불필요.
@@ -59,7 +65,10 @@ RUN pip install --no-cache-dir \
     "proxsuite>=0.6.0" \
     "ur-rtde>=1.5.0" \
     "PyYAML>=6.0" \
-    "numpy<2.0"
+    "numpy<2.0" \
+    "pyzmq>=25" \
+    "opencv-python-headless" \
+    "pyrealsense2"
 
 # =============================================================================
 # Layer 4: rosdep cache
