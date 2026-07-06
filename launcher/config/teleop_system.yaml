@@ -1,0 +1,98 @@
+# 통합 실행기 시스템 정의 — 모든 IP/포트/커맨드의 단일 소스.
+# 사용법: docs/launcher_guide_ko.md
+#
+# ⚠️ 현장 배치 시 확인할 것:
+#   - network.robot_pc_ip : robot PC 의 실제 IP
+#   - network.left_robot_ip : 왼팔 UR10e IP (현재 placeholder)
+#   - vars.teleop_dir : 각 PC 에서 teleop_dev 저장소 경로
+#   - setups.* : 각 PC 의 ROS/파이썬 환경 소스 방법
+
+version: 1
+
+network:
+  robot_pc_ip: "192.168.0.10"      # robot PC (agent + 수신부들)
+  agent_port: "9876"               # launcher agent HTTP
+  right_robot_ip: "192.168.0.2"    # 오른팔 UR10e
+  left_robot_ip: "192.168.0.3"     # 왼팔 UR10e (TODO: 실제 IP 로 교체)
+  right_delto_ip: "169.254.186.72" # 오른손 DG5F Modbus
+  left_delto_ip: "169.254.186.73"  # 왼손 DG5F Modbus
+
+vars:
+  teleop_dir: "/workspaces/tamp_ws/src/teleop_dev"
+  ws_dir: "/workspaces/tamp_ws"
+
+setups:
+  ros: "source /opt/ros/humble/setup.bash && source ${ws_dir}/install/setup.bash"
+  # conda 환경을 쓰는 PC 는 아래처럼 스니펫을 추가하고 컴포넌트 setup 에 넣을 것:
+  # conda: "source ~/miniconda3/etc/profile.d/conda.sh && conda activate teleop"
+
+agent:
+  host: "0.0.0.0"
+  port: 9876
+  token: ""            # 비-신뢰 네트워크면 토큰 설정 + GUI 쪽 동일 토큰 필요
+
+defaults:
+  stop_grace_s: 5.0
+  start_delay_s: 0.0
+
+components:
+  # ── robot PC ──────────────────────────────────────────────────────────
+  - name: dg5f-right-driver
+    group: robot
+    setup: [ros]
+    command: "ros2 launch dg5f_driver dg5f_right_pid_all_controller.launch.py delto_ip:=${right_delto_ip}"
+    start_delay_s: 3.0             # 드라이버 초기화 후 receiver 시작
+
+  - name: dg5f-left-driver
+    group: robot
+    setup: [ros]
+    command: "ros2 launch dg5f_driver dg5f_left_pid_all_controller.launch.py delto_ip:=${left_delto_ip}"
+    start_delay_s: 3.0
+
+  - name: hand-right-receiver
+    group: robot
+    setup: [ros]
+    cwd: "${teleop_dir}"
+    command: "python3 -m robot.hand.receiver --hand right --port 9872"
+    depends_on: [dg5f-right-driver]
+
+  - name: hand-left-receiver
+    group: robot
+    setup: [ros]
+    cwd: "${teleop_dir}"
+    command: "python3 -m robot.hand.receiver --hand left --port 9874"
+    depends_on: [dg5f-left-driver]
+
+  - name: arm-right-receiver
+    group: robot
+    cwd: "${teleop_dir}"
+    command: "python3 -m robot.arm.admittance.main --mode rtde --input unified --config robot/arm/admittance/config/right.yaml --robot-ip ${right_robot_ip}"
+
+  - name: arm-left-receiver
+    group: robot
+    cwd: "${teleop_dir}"
+    command: "python3 -m robot.arm.admittance.main --mode rtde --input unified --config robot/arm/admittance/config/left.yaml --robot-ip ${left_robot_ip}"
+
+  - name: cam-server
+    group: robot
+    cwd: "${teleop_dir}"
+    command: "python3 -m robot.cam.main"
+
+  # ── 조종 PC (operator) ────────────────────────────────────────────────
+  - name: adb-reverse
+    group: operator
+    command: "adb reverse tcp:8013 tcp:8013 && adb reverse tcp:8014 tcp:8014"
+    oneshot: true                  # 정상 종료(rc=0)가 완료 상태
+
+  - name: xr-dual-teleop
+    group: operator
+    cwd: "${teleop_dir}"
+    command: "python3 -m scripts.run_xr_dual_teleop --config scripts/config/xr_dual.yaml --target-ip ${robot_pc_ip}"
+    use_pty: true                  # GUI 에서 r/p/c/Space/x 키 전달 가능
+    depends_on: [adb-reverse]
+
+  - name: cam-viewer
+    group: operator
+    cwd: "${teleop_dir}"
+    command: "python3 -m sender.cam.main --robot-ip ${robot_pc_ip}"
+    depends_on: [adb-reverse]
