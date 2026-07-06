@@ -655,6 +655,9 @@ def main():
                         help="Input device (overrides config)")
     parser.add_argument("--robot-ip", type=str, default=None,
                         help="Robot IP for rtde mode (overrides config)")
+    parser.add_argument("--unified-port", type=int, default=None,
+                        help="unified input UDP listen port "
+                             "(overrides config input.unified_port — dual-arm 시 팔별 지정)")
     parser.add_argument("--config", type=str, default=None,
                         help="Path to YAML config file")
     parser.add_argument("--log", action="store_true",
@@ -676,6 +679,8 @@ def main():
         config.input.type = args.input
     if args.robot_ip:
         config.robot.ip = args.robot_ip
+    if args.unified_port is not None:
+        config.input.unified_port = args.unified_port
     if args.init_move is not None:
         config.initial_pose.enabled = args.init_move
 

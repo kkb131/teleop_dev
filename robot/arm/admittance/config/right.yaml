@@ -1,0 +1,53 @@
+# 오른팔 (검증된 기존 팔) — dual-arm 운용 시 사용
+# 실행: python3 -m robot.arm.admittance.main --mode rtde --input unified \
+#           --config robot/arm/admittance/config/right.yaml
+# 단일팔 기존 플로우는 default.yaml 그대로 사용 (이 파일과 무관).
+
+robot:
+  ip: "192.168.0.2"            # 오른팔 UR10e IP
+  mode: "rtde"
+
+control:
+  frequency_sim: 50
+  frequency_rtde: 125
+
+input:
+  type: "unified"
+  cartesian_step: 0.01
+  rotation_step: 0.05
+  unified_port: 9871           # 오른팔 sender (xr_dual.yaml arms.right.port 와 일치)
+
+filter:
+  alpha_position: 0.55
+  alpha_orientation: 0.55
+
+ik:
+  position_cost: 1.0
+  orientation_cost: 0.5
+  posture_cost: 1.0e-3
+  damping: 1.0e-12
+  soft_sync_alpha: 0.01
+
+safety:
+  packet_timeout_ms: 200
+  max_joint_vel: 0.5
+  max_ee_velocity: 0.1
+  workspace:
+    x: [-5.8, 5.8]
+    y: [-5.8, 5.8]
+    z: [0.05, 2.2]
+
+admittance:
+  enabled_by_default: true
+  default_preset: "MEDIUM"
+  max_displacement_trans: 0.15
+  max_displacement_rot: 0.30
+  force_deadzone: [3.0, 3.0, 3.0, 0.3, 0.3, 0.3]
+  force_saturation: 100.0
+  torque_saturation: 10.0
+
+initial_pose:
+  enabled: true
+  joint_values:
+    [2.24, -1.2808, 2.16, -0.8848, 2.24, 0.0]   # 오른팔 검증된 HOME_JOINTS
+  move_duration_s: 3.0

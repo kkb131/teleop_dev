@@ -1,0 +1,60 @@
+# 왼팔 (미검증 — 첫 가동 전 docs/xr_dual_arm_left_tuning_ko.md 필독)
+# 실행: python3 -m robot.arm.admittance.main --mode rtde --input unified \
+#           --config robot/arm/admittance/config/left.yaml
+#
+# ⚠️ 첫 가동 보수 설정:
+#   - initial_pose.enabled: false — 오른팔용 HOME_JOINTS 를 미러 장착 왼팔에
+#     그대로 쓰면 팔이 예상 밖 방향으로 크게 이동할 수 있음. freedrive 로
+#     안전한 왼팔 home 자세를 잡고 joint 값을 실측해 joint_values 를 채운 뒤
+#     enabled: true 로 전환할 것.
+#   - max_joint_vel 0.3 / max_ee_velocity 0.08 — 검증 완료 후 오른팔 수준으로 상향.
+#   - workspace 를 오른팔보다 좁게 — 축 방향 오류 시 이동량 제한.
+
+robot:
+  ip: "192.168.0.3"            # TODO: 왼팔 실제 IP 로 교체 (아직 미정 — placeholder)
+  mode: "rtde"
+
+control:
+  frequency_sim: 50
+  frequency_rtde: 125
+
+input:
+  type: "unified"
+  cartesian_step: 0.01
+  rotation_step: 0.05
+  unified_port: 9875           # 왼팔 sender (xr_dual.yaml arms.left.port 와 일치)
+
+filter:
+  alpha_position: 0.55
+  alpha_orientation: 0.55
+
+ik:
+  position_cost: 1.0
+  orientation_cost: 0.5
+  posture_cost: 1.0e-3
+  damping: 1.0e-12
+  soft_sync_alpha: 0.01
+
+safety:
+  packet_timeout_ms: 200
+  max_joint_vel: 0.3           # 미검증 팔 — 보수적 (검증 후 0.5)
+  max_ee_velocity: 0.08        # 미검증 팔 — 보수적 (검증 후 0.1)
+  workspace:
+    x: [-1.2, 1.2]             # UR10e reach 1.3m 이내로 제한
+    y: [-1.2, 1.2]
+    z: [0.05, 1.2]
+
+admittance:
+  enabled_by_default: true
+  default_preset: "STIFF"      # 미검증 팔 — 단단하게 시작 (검증 후 MEDIUM)
+  max_displacement_trans: 0.10
+  max_displacement_rot: 0.20
+  force_deadzone: [3.0, 3.0, 3.0, 0.3, 0.3, 0.3]
+  force_saturation: 100.0
+  torque_saturation: 10.0
+
+initial_pose:
+  enabled: false               # 왼팔 home 실측 후 joint_values 채우고 true 로
+  joint_values:
+    [2.24, -1.2808, 2.16, -0.8848, 2.24, 0.0]   # ⚠️ 오른팔 값 — 왼팔 실측값으로 교체 필요
+  move_duration_s: 5.0
