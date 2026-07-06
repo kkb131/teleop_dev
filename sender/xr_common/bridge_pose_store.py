@@ -169,6 +169,10 @@ class BridgePoseStore:
             ws server port. 우선순위: 인자 > env XR_BRIDGE_PORT > config.yaml ws.port > 8013.
         """
         if getattr(self, "_initialized", False):
+            # singleton 재사용 — 다른 port 요청은 조용히 무시되므로 경고
+            if port is not None and port != self.port:
+                print(f"[BridgePoseStore] WARN: singleton 이미 port {self.port} 로 "
+                      f"기동됨 — 요청된 port {port} 무시")
             return
         self._initialized = True
 

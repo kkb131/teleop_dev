@@ -153,6 +153,10 @@ def _hand_thread_fn(args, store: BridgePoseStore, stop_event: threading.Event) -
         import traceback
         print(f"[run_xr_teleop] hand thread error: {e}")
         traceback.print_exc()
+    finally:
+        # hand thread 사망을 main loop (--no-arm 대기 루프 포함) 에 전파.
+        # 없으면 --no-arm 실행 중 hand thread crash 시 main 이 영원히 대기.
+        stop_event.set()
 
 
 def main() -> int:

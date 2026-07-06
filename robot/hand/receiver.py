@@ -50,25 +50,33 @@ from protocol.hand_protocol import HandData, NUM_JOINTS, NUM_FINGERS
 class ManusReceiver:
     """Receives Manus glove UDP packets in a background thread."""
 
-    def __init__(self, port: int = 9872, bind_ip: str = "0.0.0.0"):
+    def __init__(self, port: int = 9872, bind_ip: str = "0.0.0.0",
+                 expected_hand: Optional[str] = None):
         self._port = port
         self._bind_ip = bind_ip
+        self._expected_hand = expected_hand
         self._latest: Optional[HandData] = None
         self._lock = threading.Lock()
         self._running = False
         self._pkt_count = 0
         self._last_recv_time = 0.0
         self._is_retargeted = False
+        self._mismatch_count = 0
+        self._last_warn_time = 0.0
 
     def start(self):
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        # 주의: SO_REUSEADDR 를 설정하지 않는다. UDP 에서 이 옵션을 켜면 같은
+        # 포트에 두 번째 receiver 가 조용히 bind 에 성공해 패킷을 나눠 갖는다
+        # (양손 운용 시 좌/우 receiver 포트 실수를 감지 못함). 중복 bind 는
+        # EADDRINUSE 로 즉시 실패해야 한다.
         self._sock.bind((self._bind_ip, self._port))
         self._sock.settimeout(0.1)
         self._running = True
         self._thread = threading.Thread(target=self._recv_loop, daemon=True)
         self._thread.start()
-        print(f"[Receiver] Listening on {self._bind_ip}:{self._port}")
+        print(f"[Receiver] Listening on {self._bind_ip}:{self._port}"
+              + (f" (hand={self._expected_hand})" if self._expected_hand else ""))
 
     def stop(self):
         self._running = False
@@ -99,6 +107,20 @@ class ManusReceiver:
                 raw, _ = self._sock.recvfrom(4096)
                 pkt = json.loads(raw.decode())
 
+                # 좌/우 receiver 가 각각 다른 포트로 도는 구성에서 sender 가
+                # 반대쪽 포트로 잘못 쏘면 (좌 데이터 → 우 hand 구동) 위험하므로
+                # hand 필드 불일치 패킷은 버린다.
+                pkt_hand = pkt.get("hand", "right")
+                if self._expected_hand is not None and pkt_hand != self._expected_hand:
+                    self._mismatch_count += 1
+                    now = time.time()
+                    if now - self._last_warn_time >= 1.0:
+                        self._last_warn_time = now
+                        print(f"\n[Receiver] WARN: hand mismatch — packet hand={pkt_hand!r}, "
+                              f"expected {self._expected_hand!r} (dropped "
+                              f"{self._mismatch_count} total). sender --hand/--port 확인")
+                    continue
+
                 data = HandData(
                     joint_angles=np.array(pkt["joint_angles"], dtype=np.float32),
                     finger_spread=np.array(pkt.get("finger_spread", [0] * NUM_FINGERS), dtype=np.float32),
@@ -121,8 +143,18 @@ class ManusReceiver:
 
             except socket.timeout:
                 continue
-            except (json.JSONDecodeError, KeyError, Exception):
+            except (json.JSONDecodeError, KeyError, ValueError, UnicodeDecodeError) as e:
+                # malformed packet — 무한 스팸 방지 위해 1s rate-limit 로그
+                now = time.time()
+                if now - self._last_warn_time >= 1.0:
+                    self._last_warn_time = now
+                    print(f"\n[Receiver] WARN: malformed packet dropped: {e}")
                 continue
+            except OSError:
+                # socket closed during stop()
+                if self._running:
+                    raise
+                break
 
 
 # ─────────────────────────────────────────────────────────
@@ -209,8 +241,8 @@ def main():
         print(f"  [ROS2] DG5FROS2Client initialized "
               f"({args.hand} hand, mode={args.mode}, topic={client.command_topic})")
 
-    # Setup UDP receiver
-    receiver = ManusReceiver(port=args.port)
+    # Setup UDP receiver — expected_hand 로 반대쪽 hand 패킷 차단
+    receiver = ManusReceiver(port=args.port, expected_hand=args.hand)
     receiver.start()
 
     # Graceful shutdown

@@ -116,6 +116,8 @@ class XRArmSender(TeleopSenderBase):
         self._started = False     # 'r' 키 누르기 전에는 robot origin 만 유지
         self._paused = False
         self._old_settings = None
+        # no-keyboard 모드 자동 calibrate 재시도 rate-limit (1s)
+        self._last_auto_calib_attempt = 0.0
         # 새 process 시작 시각 — 'r' calibrate 호출 시 BridgePoseStore msg 가
         # 이 시각 이후의 fresh msg 인지 확인하여 stale data 로 origin 잡히는 사고 방지.
         self._sender_start_time = time.perf_counter()
@@ -159,7 +161,8 @@ class XRArmSender(TeleopSenderBase):
         print("[XRArmSender]    회전된 채로 나옴. (xr_frame_align.py docstring 참조)")
         print("[XRArmSender] ─────────────────────────────────────────────")
         if self.no_keyboard:
-            print("[XRArmSender] keyboard 비활성 (no-keyboard=True). 시작 시 즉시 calibrate.")
+            print("[XRArmSender] keyboard 비활성 (no-keyboard=True). "
+                  "헤드셋 fresh msg 확보되면 자동 calibrate (1s 간격 재시도).")
             self._started = True
             return
         self._old_settings = termios.tcgetattr(sys.stdin)
@@ -245,6 +248,19 @@ class XRArmSender(TeleopSenderBase):
                     f"\n[XRArmSender] WARN: BridgePoseStore stale (count={self._watchdog.stale_count})"
                     " — virtual_pose 유지, robot 명령 freeze"
                 )
+            result.buttons = buttons
+            return result
+
+        # 2.6) 캘리브레이션 완료 전에는 virtual_pose 를 절대 건드리지 않음.
+        # _calibrate_now 가 실패해도 _started=True 가 될 수 있고 (r 키 stale 등),
+        # 그 상태에서 aligner.apply() 는 (0,0,0) 을 반환해 robot 이 base 원점으로
+        # 기어가는 사고 방지. no-keyboard 모드는 여기서 1s 간격 자동 재시도.
+        if not self._aligner.calibrated:
+            if self.no_keyboard:
+                now = time.perf_counter()
+                if now - self._last_auto_calib_attempt >= 1.0:
+                    self._last_auto_calib_attempt = now
+                    self._calibrate_now(label="auto (no-keyboard)")
             result.buttons = buttons
             return result
 
