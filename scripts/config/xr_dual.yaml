@@ -1,0 +1,56 @@
+# Dual-arm + dual-hand XR teleop 설정 (scripts/run_xr_dual_teleop.py)
+#
+# 포트 배치 (robot PC 측 수신 포트):
+#   9871 right arm   9872 right hand   9874 left hand   9875 left arm
+#   (9873 은 cam ZMQ 가 사용 중)
+#
+# remap (WebXR → 각 팔 base_link 축 정렬):
+#   우선순위: remap_matrix > remap_rpy_deg > 기본값 [90, 0, 0] (= R_x(+90°))
+#   - 오른팔 [90, 0, 0]   : 단일팔에서 실측 검증된 기존 매핑
+#   - 왼팔  [90, 0, 180]  : 대면(미러) 장착 가정의 시작값 — 반드시
+#     docs/xr_dual_arm_left_tuning_ko.md 의 축별 검증 절차로 확정할 것.
+#     각도 장착(예: 몸통에서 ±45° 벌어짐)이면 yaw 를 장착 각도에 맞게 조정.
+#   - 완전 커스텀은 remap_matrix (3×3, det=+1 proper rotation) 로 직접 지정:
+#     remap_matrix: [[1,0,0],[0,0,-1],[0,1,0]]
+
+network:
+  robot_pc_ip: "192.168.0.10"   # --target-ip 로 override 가능
+  bridge_port: 8013             # BridgePoseStore ws (헤드셋 adb reverse 대상)
+
+safety:
+  watchdog_timeout_s: 0.2       # BridgePoseStore stale 판정
+  enforce_workspace: true
+
+arms:
+  right:
+    enabled: true
+    port: 9871
+    hz: 50
+    scale: 0.5                  # 검증된 팔 — 그래도 dual 첫 가동은 보수적으로
+    remap_rpy_deg: [90.0, 0.0, 0.0]
+    workspace:                  # base_link 기준 [min, max] (m)
+      x: [-0.7, 0.7]
+      y: [-0.7, 0.7]
+      z: [0.05, 0.8]
+  left:
+    enabled: true
+    port: 9875
+    hz: 50
+    scale: 0.3                  # 미검증 팔 — 저속 시작 (튜닝 후 상향)
+    remap_rpy_deg: [90.0, 0.0, 180.0]
+    workspace:                  # 첫 가동은 좁게 — 튜닝 후 확장
+      x: [-0.5, 0.5]
+      y: [-0.5, 0.5]
+      z: [0.05, 0.6]
+
+hands:
+  right:
+    enabled: true
+    port: 9872
+    hz: 60
+    convention: mediapipe
+  left:
+    enabled: true
+    port: 9874
+    hz: 60
+    convention: mediapipe
