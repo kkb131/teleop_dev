@@ -60,7 +60,9 @@ class CaptureWorker(threading.Thread):
         self._fps = fps
         self._publisher = publisher
         self._quality = jpeg_quality
-        self._stop = stop_event
+        # threading.Thread 내부 메서드 _stop() 을 가리면 join() 이
+        # TypeError('Event' object is not callable) 로 죽는다 — 이름 충돌 금지.
+        self._stop_event = stop_event
 
         self._seq = 0
         # 통계 (get_stats 로 조회, 2초 주기 리셋)
@@ -75,7 +77,7 @@ class CaptureWorker(threading.Thread):
         encode_params = [cv2.IMWRITE_JPEG_QUALITY, self._quality]
         next_t = time.monotonic()
 
-        while not self._stop.is_set():
+        while not self._stop_event.is_set():
             ok, frame = self._camera.read()
             if ok and frame is not None:
                 ok_enc, buf = cv2.imencode(".jpg", frame, encode_params)
@@ -101,7 +103,7 @@ class CaptureWorker(threading.Thread):
             next_t += period
             delay = next_t - time.monotonic()
             if delay > 0:
-                self._stop.wait(delay)
+                self._stop_event.wait(delay)
             else:
                 next_t = time.monotonic()   # 밀리면 리셋 (버스트 방지)
 

@@ -5,6 +5,9 @@
 #   브라우저 뷰: http://localhost:8014/
 #   VR (기존 텔레옵 세션 통합): sender/xr_common/config.yaml 의 cam.enabled: true
 #   헤드셋 USB 모드: adb reverse tcp:8014 tcp:8014 (8013 과 별개로 추가 필요)
+#
+# 참고: XR 페이지(webxr_to_pose.html)는 BridgePoseStore(8013) 가 서빙한다.
+#   sender.cam.main 단독으로는 8013 이 없음 — xr_hand_sender 등과 함께 실행할 것.
 
 zmq:
   robot_ip: 192.168.0.2     # 로봇 PC IP
@@ -21,8 +24,14 @@ vr:
   # world_locked — 세션 시작 시점 위치에 화면 고정 (머리 움직여도 그대로).
   #                POST /recenter 또는 브라우저 뷰의 Recenter 버튼으로 재정렬.
   mode: head_locked
-  plane_distance_m: 1.0     # 시점(anchor)으로부터 plane 거리
-  plane_width_m: 1.06       # 640x480 → 4:3
+  plane_distance_m: 1.0     # 시점(anchor)으로부터 plane 거리 (전역 기본값)
+  plane_width_m: 1.06       # 640x480 → 4:3 (전역 기본값)
   plane_height_m: 0.8
   plane_height_offset_m: 0.0
-  yaw_deg: [0, -40, 40]     # 카메라별 좌우 배치 각도 (index 순. +=왼쪽)
+  yaw_deg: [0, -40, 40]     # legacy: planes 미지정 카메라의 index별 yaw fallback (+=왼쪽)
+  # 카메라 이름별 개별 배치 — 미지정 필드는 위 전역값 사용.
+  # 필드: yaw_deg(+=왼쪽) pitch_deg(+=위) distance_m width_m height_m height_offset_m
+  planes:
+    head:        { yaw_deg: 0,   width_m: 1.06, height_m: 0.8 }
+    left_wrist:  { yaw_deg: -40, width_m: 0.53, height_m: 0.4, height_offset_m: -0.35, pitch_deg: -10 }
+    right_wrist: { yaw_deg: 40,  width_m: 0.53, height_m: 0.4, height_offset_m: -0.35, pitch_deg: -10 }

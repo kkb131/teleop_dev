@@ -12,6 +12,12 @@
 VR 통합: sender/xr_common/config.yaml 의 cam.enabled: true 로 설정하면
 webxr_to_pose.html 이 이 서버의 /config, /ws 에 접속한다.
 헤드셋 USB 모드: adb reverse tcp:8014 tcp:8014 (8013 과 별개로 추가).
+
+포트 역할 (이 프로세스는 8013 을 열지 않는다 — 단독 실행 시 8013 미접속은 정상):
+  * 8014 (이 프로세스)      — 브라우저 그리드 뷰 + 프레임 WS + /config
+  * 8013 (BridgePoseStore) — XR 페이지(webxr_to_pose.html) 서빙 + pose WS.
+    sender.hand.xr_hand_sender / sender.arm.xr_arm_sender / scripts/run_xr_teleop.py
+    가 띄운다. 헤드셋 XR 테스트는 이 중 하나와 함께 실행할 것.
 """
 
 import argparse

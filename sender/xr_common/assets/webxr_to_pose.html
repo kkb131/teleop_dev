@@ -149,6 +149,9 @@ let VR_LAYOUT = {
   plane_distance_m: 1.0, plane_width_m: 1.06, plane_height_m: 0.8,
   plane_height_offset_m: 0.0, yaw_deg: [0, -40, 40],
 };
+// 카메라별 최종 배치 (index = cam index). 서버 vr.planes 가 있으면 그대로,
+// 없으면(구버전 서버) VR_LAYOUT 전역값으로 합성 — placement 계산은 이것만 참조.
+let CAM_PLANES = [];
 function _applyConfig() {
   const camCfg = CONFIG.cam || {};
   CAM_OFF  = URL_PARAMS.get('cam_off') === '1' || camCfg.enabled !== true;
@@ -165,6 +168,19 @@ function _applyCamServerConfig(c) {
     plane_height_offset_m: parseFloat(String(vr.plane_height_offset_m ?? 0.0)),
     yaw_deg:               vr.yaw_deg || [0, -40, 40],
   };
+  if (Array.isArray(vr.planes) && vr.planes.length === CAM_NAMES.length) {
+    CAM_PLANES = vr.planes;
+  } else {
+    // 구버전 서버 fallback: 전역값 + index별 yaw 로 동일 plane 합성
+    CAM_PLANES = CAM_NAMES.map((_, i) => ({
+      yaw_deg:         VR_LAYOUT.yaw_deg[i] || 0,
+      pitch_deg:       0,
+      distance_m:      VR_LAYOUT.plane_distance_m,
+      width_m:         VR_LAYOUT.plane_width_m,
+      height_m:        VR_LAYOUT.plane_height_m,
+      height_offset_m: VR_LAYOUT.plane_height_offset_m,
+    }));
+  }
   CAM_MODE = URL_PARAMS.get('cam_mode') || vr.mode || 'head_locked';
 }
 _applyConfig();
@@ -190,9 +206,13 @@ function _fetchCamConfig() {
     .then(r => r.ok ? r.json() : Promise.reject(new Error('status ' + r.status)))
     .then(c => {
       _applyCamServerConfig(c);
-      autoLog(`cam config loaded: ${CAM_NAMES.length} cams [${CAM_NAMES.join(', ')}] ` +
-              `mode=${CAM_MODE} plane=${VR_LAYOUT.plane_distance_m}m ` +
-              `${VR_LAYOUT.plane_width_m}×${VR_LAYOUT.plane_height_m}m`, 'ok');
+      autoLog(`cam config loaded: ${CAM_NAMES.length} cams mode=${CAM_MODE}`, 'ok');
+      CAM_NAMES.forEach((n, i) => {
+        const p = CAM_PLANES[i] || {};
+        autoLog(`  ${n}: ${p.width_m}×${p.height_m}m @${p.distance_m}m ` +
+                `yaw=${p.yaw_deg}° pitch=${p.pitch_deg}° h_off=${p.height_offset_m}m`,
+                'muted');
+      });
       _connectCamWS();
     })
     .catch(e => {
@@ -280,6 +300,10 @@ function mat4Multiply(a, b) {   // returns a·b
 function mat4RotY(rad) {
   const c = Math.cos(rad), s = Math.sin(rad);
   return new Float32Array([c,0,-s,0, 0,1,0,0, s,0,c,0, 0,0,0,1]);
+}
+function mat4RotX(rad) {
+  const c = Math.cos(rad), s = Math.sin(rad);
+  return new Float32Array([1,0,0,0, 0,c,s,0, 0,-s,c,0, 0,0,0,1]);
 }
 function mat4Translate(x, y, z) {
   return new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, x,y,z,1]);
@@ -371,15 +395,17 @@ void main() {
     return { texture: tex, texW: 0, texH: 0 };
   });
 
-  // placement[i] = RotY(yaw_i)·Translate(0, h_off, −dist)·Scale(w, h, 1)
-  // — anchor(또는 머리) 를 중심으로 yaw_deg 각도에 plane 배치.
+  // placement[i] = RotY(yaw_i)·RotX(pitch_i)·Translate(0, h_off_i, −dist_i)·Scale(w_i, h_i, 1)
+  // — anchor(또는 머리) 를 중심으로 카메라별 각도/거리/크기로 plane 배치.
   camPlacements = CAM_NAMES.map((_, i) => {
-    const yawRad = (VR_LAYOUT.yaw_deg[i] || 0) * Math.PI / 180.0;
+    const p = CAM_PLANES[i] || {};
+    const yawRad   = (p.yaw_deg   ?? 0) * Math.PI / 180.0;
+    const pitchRad = (p.pitch_deg ?? 0) * Math.PI / 180.0;
     return mat4Multiply(
-      mat4RotY(yawRad),
+      mat4Multiply(mat4RotY(yawRad), mat4RotX(pitchRad)),
       mat4Multiply(
-        mat4Translate(0, VR_LAYOUT.plane_height_offset_m, -VR_LAYOUT.plane_distance_m),
-        mat4Scale(VR_LAYOUT.plane_width_m, VR_LAYOUT.plane_height_m, 1),
+        mat4Translate(0, p.height_offset_m ?? 0, -(p.distance_m ?? 1.0)),
+        mat4Scale(p.width_m ?? 1.06, p.height_m ?? 0.8, 1),
       ),
     );
   });

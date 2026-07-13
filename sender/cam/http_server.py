@@ -102,6 +102,9 @@ class CamHttpServer:
                 "plane_height_m": vr.plane_height_m,
                 "plane_height_offset_m": vr.plane_height_offset_m,
                 "yaw_deg": vr.yaw_deg,
+                # index = cam index. 카메라별 최종 배치값 (planes override 병합 완료)
+                "planes": [vr.resolve_plane(name, i)
+                           for i, name in enumerate(self._cameras)],
             },
         }
         return web.json_response(payload, headers=_CORS)

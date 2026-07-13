@@ -7,7 +7,7 @@ cameras[].name 과 이름이 일치해야 구독이 성립한다.
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import yaml
 
@@ -30,6 +30,17 @@ class HttpConfig:
 
 
 @dataclass
+class PlaneConfig:
+    """카메라 1대의 VR plane 배치 override — None 필드는 VrConfig 전역값 사용."""
+    yaw_deg: Optional[float] = None           # 좌우 각도 (+=왼쪽)
+    pitch_deg: Optional[float] = None         # 상하 각도 (+=위)
+    distance_m: Optional[float] = None
+    width_m: Optional[float] = None
+    height_m: Optional[float] = None
+    height_offset_m: Optional[float] = None
+
+
+@dataclass
 class VrConfig:
     mode: str = "head_locked"                 # head_locked | world_locked (화면 고정)
     plane_distance_m: float = 1.0
@@ -37,6 +48,20 @@ class VrConfig:
     plane_height_m: float = 0.8
     plane_height_offset_m: float = 0.0
     yaw_deg: List[float] = field(default_factory=lambda: [0.0, -40.0, 40.0])
+    planes: Dict[str, PlaneConfig] = field(default_factory=dict)  # key = 카메라 이름
+
+    def resolve_plane(self, name: str, index: int) -> dict:
+        """카메라별 최종 배치값 — planes[name] override + 전역/legacy fallback."""
+        p = self.planes.get(name)
+        yaw_default = self.yaw_deg[index] if index < len(self.yaw_deg) else 0.0
+        return {
+            "yaw_deg":         p.yaw_deg         if p and p.yaw_deg         is not None else yaw_default,
+            "pitch_deg":       p.pitch_deg       if p and p.pitch_deg       is not None else 0.0,
+            "distance_m":      p.distance_m      if p and p.distance_m      is not None else self.plane_distance_m,
+            "width_m":         p.width_m         if p and p.width_m         is not None else self.plane_width_m,
+            "height_m":        p.height_m        if p and p.height_m        is not None else self.plane_height_m,
+            "height_offset_m": p.height_offset_m if p and p.height_offset_m is not None else self.plane_height_offset_m,
+        }
 
 
 @dataclass
@@ -61,5 +86,10 @@ class SenderCamConfig:
         if "http" in data:
             cfg.http = HttpConfig(**data["http"])
         if "vr" in data:
-            cfg.vr = VrConfig(**data["vr"])
+            vr_data = dict(data["vr"])
+            planes_data = vr_data.pop("planes", None) or {}
+            cfg.vr = VrConfig(**vr_data)
+            cfg.vr.planes = {
+                name: PlaneConfig(**(d or {})) for name, d in planes_data.items()
+            }
         return cfg
