@@ -452,6 +452,9 @@ timestamp,ee_x,ee_y,ee_z,ee_roll,ee_pitch,ee_yaw,j1,j2,j3,j4,j5,j6,ee_vel,safety
 - 해결: `apt-get remove -y ros-humble-pinocchio && pip install "pin>=4.1,<5"`
   (apt 버전이 남아있으면 ROS PYTHONPATH가 pip `pin`을 가려 계속 재발)
 - 확인: `python3 -c "import pinocchio; print(pinocchio.__file__)"` → `/opt/ros/` 가 아니어야 함
+- `undefined symbol: EIGENPY_ARRAY_APIPyArray_RUNTIME_VERSION` = 의존성으로 남은
+  `ros-humble-eigenpy`의 libeigenpy.so(numpy 1.x 빌드)가 LD_LIBRARY_PATH로 pip 버전을 가림
+  → `apt-get remove -y ros-humble-eigenpy ros-humble-hpp-fcl`
 
 ### controller_manager 에러 (sim 모드)
 

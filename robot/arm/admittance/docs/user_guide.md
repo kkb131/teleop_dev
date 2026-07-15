@@ -329,6 +329,19 @@ pip install "pin>=4.1,<5"
 python3 -c "import pinocchio; print(pinocchio.__version__, pinocchio.__file__)"
 ```
 
+### `undefined symbol: EIGENPY_ARRAY_APIPyArray_RUNTIME_VERSION`
+
+**원인**: `ros-humble-pinocchio` 제거 후에도 의존성으로 딸려온 **`ros-humble-eigenpy`**
+(numpy 1.x 빌드)가 남아, ROS source 시 LD_LIBRARY_PATH의 `/opt/ros/humble/lib/libeigenpy.so`가
+pip `pin`의 cmeel eigenpy를 가림. 이 심볼은 numpy 2 빌드 eigenpy에만 존재한다.
+
+```bash
+# 원인 확인 (이게 성공하면 shadowing 확정)
+env -u LD_LIBRARY_PATH python3 -c "import pinocchio; print(pinocchio.__version__)"
+# 해결: 잔여 ROS 패키지 제거
+apt-get remove -y ros-humble-eigenpy ros-humble-hpp-fcl
+```
+
 ### `[WARN] controller_manager not available` (sim 모드)
 
 **원인**: Terminal 1의 mock hardware 드라이버가 실행되지 않았거나 아직 초기화 중.

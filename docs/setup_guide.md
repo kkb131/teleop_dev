@@ -301,7 +301,10 @@ python3 -m robot.arm.admittance.main --mode rtde --input unified --robot-ip 192.
 
 - **`pip install pink` 금지**: `pink`는 코드 포매터. IK 라이브러리는 **`pip install pin-pink`**
 - **로봇 PC: apt `ros-humble-pinocchio` 설치 금지**: numpy 1.x ABI 빌드라 numpy>=2 와 깨지고,
-  ROS를 source하면 PYTHONPATH가 pip `pin`을 가린다. pinocchio는 pip `pin>=4.1,<5` + numpy>=2 사용
+  ROS를 source하면 PYTHONPATH가 pip `pin`을 가린다. pinocchio는 pip `pin>=4.1,<5` + numpy>=2 사용.
+  제거 시 의존성으로 딸려온 **`ros-humble-eigenpy`/`ros-humble-hpp-fcl`도 같이 제거**할 것 —
+  남아있으면 LD_LIBRARY_PATH의 libeigenpy.so가 pip 버전을 가려
+  `undefined symbol: EIGENPY_ARRAY_APIPyArray_RUNTIME_VERSION` 발생
 - **조종 PC는 여전히 numpy < 2**: mediapipe==0.10.21 / dex_retargeting 제약 (머신별 환경이 다른 것이 정상)
 - **RTDEControlInterface 사용 금지** (impedance 모드): UR10e에서 hang 발생. RTDEIOInterface + TCP socket 조합 사용
 - **DG5F 직접 Modbus 통신 불필요**: `robot/hand/*` 는 `dg5f_driver` (ROS2 dg5f_ros2 스택) 를 통해 모터 명령 전송. Modbus TCP 는 driver 가 내부 처리

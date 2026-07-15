@@ -40,6 +40,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-setuptools \
     && rm -rf /var/lib/apt/lists/*
 
+# apt pinocchio/eigenpy/hpp-fcl 잔재 제거 (base image 포함 가능성 대비).
+# numpy 1.x ABI 빌드인 이들의 .so 가 /opt/ros/humble/lib 에 있으면 ROS source 시
+# LD_LIBRARY_PATH 가 pip pin 의 cmeel 라이브러리를 가려 undefined symbol
+# (예: EIGENPY_ARRAY_APIPyArray_RUNTIME_VERSION) 로 죽는다.
+RUN apt-get update \
+    && apt-get remove -y \
+        ros-${ROS_DISTRO}-pinocchio \
+        ros-${ROS_DISTRO}-eigenpy \
+        ros-${ROS_DISTRO}-hpp-fcl \
+        2>/dev/null || true \
+    && rm -rf /var/lib/apt/lists/*
+
 # =============================================================================
 # Layer 3: Python pip dependencies (teleop robot)
 #
