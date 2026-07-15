@@ -130,6 +130,7 @@ class XRArmSender(TeleopSenderBase):
         self._aligner = XRRelativeFrameAligner(scale=scale, r_remap=r_remap)
         self._watchdog = StoreWatchdog(self._store, timeout_s=watchdog_timeout_s)
         self._clamp_warn_count = 0
+        self._invalid_pose_count = 0
 
         # state machine
         self._started = False     # 'r' 키 누르기 전에는 robot origin 만 유지
@@ -218,6 +219,12 @@ class XRArmSender(TeleopSenderBase):
             return ch
         return None
 
+    def _user_pose(self) -> np.ndarray:
+        """hand_side 에 따라 BridgePoseStore 의 손목 pose (4×4 WebXR local-floor) 반환."""
+        if self.hand_side == "right":
+            return self._store.right_arm_pose
+        return self._store.left_arm_pose
+
     # ── input loop — override 패턴 ────────────────────────────────────
     def _read_input(self) -> InputResult:
         """sender_base 의 _read_input 호출. 매 loop 마다:
@@ -296,6 +303,19 @@ class XRArmSender(TeleopSenderBase):
             return result
 
         user_pose = self._user_pose()
+
+        # 2.65) invalid pose 방어 — watchdog 은 msg 신선도만 보므로, 손 tracking
+        # 유실 등으로 pose 가 zeros/비유한이면 virtual_pose 유지 (freeze).
+        if not _is_valid_pose(user_pose):
+            self._invalid_pose_count += 1
+            if self._invalid_pose_count in (1, 30, 300):
+                print(
+                    f"\n{self._tag} WARN: user wrist pose invalid "
+                    f"(count={self._invalid_pose_count}) — virtual_pose 유지"
+                )
+            result.buttons = buttons
+            return result
+        self._invalid_pose_count = 0
 
         target_pos, target_quat = self._aligner.apply(user_pose)
 
