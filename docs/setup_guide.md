@@ -221,7 +221,6 @@ sudo apt install ros-humble-desktop
 
 ```bash
 sudo apt install -y \
-  ros-humble-pinocchio \
   ros-humble-ros2-control \
   ros-humble-ros2-controllers \
   ros-humble-ur-msgs \
@@ -239,16 +238,18 @@ source ~/teleop_robot_env/bin/activate
 
 # pip 패키지 설치
 pip install \
+  "pin>=4.1,<5" \
   "pin-pink>=4.0.0" \
   "proxsuite>=0.6.0" \
   "ur-rtde>=1.5.0" \
   "PyYAML>=6.0" \
-  "numpy<2.0"
+  "numpy>=2,<3"
 ```
 
-> `--system-site-packages`가 중요: ROS2 apt로 설치한 pinocchio, rclpy 등을 venv에서 사용 가능하게 함.
+> `--system-site-packages`가 중요: ROS2 apt로 설치한 rclpy 등을 venv에서 사용 가능하게 함.
 
-> Conda를 사용하는 경우 pinocchio를 `conda install -c conda-forge pinocchio` 로 설치할 수 있지만, ROS2 패키지(rclpy, sensor_msgs)와 충돌 가능. venv + `--system-site-packages`를 추천.
+> pinocchio는 pip `pin` 패키지(4.x, numpy 2 호환)로 설치한다. **apt `ros-humble-pinocchio`는
+> 설치 금지** — numpy 1.x ABI 빌드라 numpy>=2 와 깨지고, ROS PYTHONPATH 가 pip 버전을 가린다.
 
 ### 4.4 실행
 
@@ -284,8 +285,8 @@ python3 -m robot.arm.admittance.main --mode rtde --input unified --robot-ip 192.
 
 | 패키지 | 출처 | 용도 |
 |--------|------|------|
-| numpy (<2.0) | pip | 수치 연산 (pinocchio ABI 호환) |
-| pinocchio | apt (`ros-humble-pinocchio`) | FK/Jacobian/IK |
+| numpy (>=2) | pip | 수치 연산 (opencv 4.12+/pin 4.x 호환) |
+| pinocchio | pip (`pin>=4.1,<5`) | FK/Jacobian/IK (numpy 2 호환 빌드) |
 | pin-pink | pip | QP 기반 IK (Pink) |
 | proxsuite | pip | QP solver 백엔드 |
 | ur-rtde | pip | UR10e RTDE 통신 (servoJ / URScript socket) |
@@ -299,6 +300,8 @@ python3 -m robot.arm.admittance.main --mode rtde --input unified --robot-ip 192.
 ## 주의사항
 
 - **`pip install pink` 금지**: `pink`는 코드 포매터. IK 라이브러리는 **`pip install pin-pink`**
-- **numpy < 2.0 필수**: pinocchio가 numpy 1.x ABI로 컴파일됨
+- **로봇 PC: apt `ros-humble-pinocchio` 설치 금지**: numpy 1.x ABI 빌드라 numpy>=2 와 깨지고,
+  ROS를 source하면 PYTHONPATH가 pip `pin`을 가린다. pinocchio는 pip `pin>=4.1,<5` + numpy>=2 사용
+- **조종 PC는 여전히 numpy < 2**: mediapipe==0.10.21 / dex_retargeting 제약 (머신별 환경이 다른 것이 정상)
 - **RTDEControlInterface 사용 금지** (impedance 모드): UR10e에서 hang 발생. RTDEIOInterface + TCP socket 조합 사용
 - **DG5F 직접 Modbus 통신 불필요**: `robot/hand/*` 는 `dg5f_driver` (ROS2 dg5f_ros2 스택) 를 통해 모터 명령 전송. Modbus TCP 는 driver 가 내부 처리

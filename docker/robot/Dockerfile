@@ -29,7 +29,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Layer 2: ROS2 robot control dependencies
 # =============================================================================
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ros-${ROS_DISTRO}-pinocchio \
     ros-${ROS_DISTRO}-ros2-control \
     ros-${ROS_DISTRO}-ros2-controllers \
     ros-${ROS_DISTRO}-joint-state-publisher \
@@ -44,12 +43,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # =============================================================================
 # Layer 3: Python pip dependencies (teleop robot)
 #
+#   pin         - pinocchio 4.x pip 빌드 (numpy 2 호환, aarch64 휠 제공)
+#                 주의 1: apt ros-humble-pinocchio 설치 금지 — numpy 1.x ABI 빌드라
+#                 numpy>=2 와 깨지고, ROS PYTHONPATH/LD_LIBRARY_PATH 가 pip 버전을 가린다
+#                 주의 2: pin 3.x 는 cmeel 의존성 메타데이터가 느슨해 최신 sibling
+#                 (cmeel-urdfdom 6, coal 3.0.2+) 과 .so 버전 불일치로 깨짐 —
+#                 libpinocchio== 정확 고정 패키징인 4.x 를 사용할 것 (2026-07 검증)
 #   pin-pink    - QP 기반 IK (pinocchio 위에 구축)
 #                 주의: "pip install pink"는 코드 포매터!
+#   typing_extensions - pin-pink 4.2.0 이 requires_dist 에 누락한 실의존성
 #   proxsuite   - QP solver 백엔드
 #   ur-rtde     - UR 로봇 RTDE 통신 (servoJ + URScript socket)
 #   PyYAML      - YAML 설정 파싱
-#   numpy <2.0  - pinocchio ABI 호환
+#   numpy >=2   - opencv 4.12+ / pin 4.x 호환 (조종 PC conda 는 mediapipe 때문에
+#                 numpy<2 유지 — 머신별 환경이 다른 것이 정상)
 #   pyzmq       - robot/cam D405 컬러 스트리밍 ZMQ PUB (JPEG)
 #   opencv-python-headless - JPEG 인코딩 (robot/cam, GUI 불필요)
 #   pyrealsense2 - D405 컬러 캡처 (robot/cam)
@@ -61,13 +68,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # robot/hand/* 는 ROS2 토픽으로만 통신하므로 pymodbus 불필요.
 # =============================================================================
 RUN pip install --no-cache-dir \
+    "pin>=4.1,<5" \
     "pin-pink>=4.0.0" \
+    "typing_extensions" \
     "proxsuite>=0.6.0" \
     "ur-rtde>=1.5.0" \
     "PyYAML>=6.0" \
-    "numpy<2.0" \
+    "numpy>=2,<3" \
     "pyzmq>=25" \
-    "opencv-python-headless" \
+    "opencv-python-headless>=4.12" \
     "pyrealsense2"
 
 # =============================================================================

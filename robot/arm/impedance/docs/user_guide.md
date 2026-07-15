@@ -41,8 +41,9 @@ Input → ExpFilter → Workspace Clamp     RTDE 레지스터 읽기
   - `direct_torque()`, `get_coriolis_and_centrifugal_torques()` API 필요
   - 버전 미만 시 URScript 업로드 실패
 - **ur_rtde** Python 라이브러리 (`pip install ur-rtde`)
-- **Pink IK**: `pip install pin-pink proxsuite` (주의: `pip install pink`은 코드 포매터!)
-- **numpy < 2**: `pip install "numpy<2"` (ROS Humble pinocchio 호환)
+- **Pink IK**: `pip install "pin>=4.1,<5" pin-pink proxsuite` (주의: `pip install pink`은 코드 포매터!)
+- **numpy >= 2**: pinocchio는 pip `pin` 4.x(numpy 2 호환)를 사용.
+  apt `ros-humble-pinocchio` 설치 금지 (numpy 1.x ABI + ROS PYTHONPATH가 pip 버전을 가림)
 
 
 ## 실행 방법
@@ -447,8 +448,10 @@ timestamp,ee_x,ee_y,ee_z,ee_roll,ee_pitch,ee_yaw,j1,j2,j3,j4,j5,j6,ee_vel,safety
 
 ### numpy 호환 에러
 
-- `_ARRAY_API not found` → `pip install "numpy<2"` 실행
-- ROS Humble의 pinocchio는 numpy 1.x로 컴파일됨
+- `_ARRAY_API not found` = apt `ros-humble-pinocchio`(numpy 1.x ABI)와 numpy 2.x 혼용
+- 해결: `apt-get remove -y ros-humble-pinocchio && pip install "pin>=4.1,<5"`
+  (apt 버전이 남아있으면 ROS PYTHONPATH가 pip `pin`을 가려 계속 재발)
+- 확인: `python3 -c "import pinocchio; print(pinocchio.__file__)"` → `/opt/ros/` 가 아니어야 함
 
 ### controller_manager 에러 (sim 모드)
 

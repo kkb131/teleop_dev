@@ -34,13 +34,14 @@ UR10e 어드미턴스 원격조종 프로그램의 설치부터 실행, 조작, 
 ### 2.1 Python 의존성 설치
 
 ```bash
-pip install pin-pink proxsuite
-pip install "numpy<2"
+pip install "pin>=4.1,<5" pin-pink proxsuite "numpy>=2,<3"
 ```
 
 > **주의**: `pip install pink`는 코드 포매터입니다! 반드시 **`pin-pink`** 를 설치하세요.
 >
-> **주의**: numpy 2.x는 pinocchio와 호환되지 않습니다. 반드시 `numpy<2`를 설치하세요.
+> **주의**: pinocchio는 pip `pin` 패키지(4.x, numpy 2 호환)를 사용합니다.
+> apt `ros-humble-pinocchio`는 numpy 1.x ABI 빌드라 numpy>=2 와 깨지고, ROS를 source하면
+> PYTHONPATH가 pip 버전을 가리므로 **설치(공존) 금지**입니다.
 
 ### 2.2 URDF 파일 확인
 
@@ -82,7 +83,7 @@ ros2 launch ur_robot_driver ur10e.launch.py use_fake_hardware:=true robot_ip:=0.
 ### Step 1: 의존성 설치
 
 ```bash
-pip install pin-pink proxsuite "numpy<2"
+pip install "pin>=4.1,<5" pin-pink proxsuite "numpy>=2,<3"
 ```
 
 ### Step 2: mock hardware 실행 (Terminal 1)
@@ -316,12 +317,16 @@ pip uninstall pink
 pip install pin-pink proxsuite
 ```
 
-### `ValueError` 또는 segfault (numpy 관련)
+### `ValueError` 또는 segfault, `_ARRAY_API not found` (numpy 관련)
 
-**원인**: numpy 2.x와 pinocchio의 ABI 비호환.
+**원인**: apt `ros-humble-pinocchio`(numpy 1.x ABI 빌드)와 numpy 2.x 혼용.
+apt 버전이 남아있으면 ROS PYTHONPATH가 pip `pin`을 가려서 계속 재발한다.
 
 ```bash
-pip install "numpy<2"
+apt-get remove -y ros-humble-pinocchio
+pip install "pin>=4.1,<5"
+# 확인: pinocchio 경로가 /opt/ros/ 가 아니어야 함
+python3 -c "import pinocchio; print(pinocchio.__version__, pinocchio.__file__)"
 ```
 
 ### `[WARN] controller_manager not available` (sim 모드)

@@ -332,8 +332,8 @@ python3 -m robot.cam.main                  # config/default.yaml 기준
 
 | 패키지 | 용도 |
 |--------|------|
-| numpy (<2.0) | 수치 연산 (pinocchio ABI 호환) |
-| pinocchio | FK/Jacobian/IK (apt: ros-humble-pinocchio) |
+| numpy (>=2) | 수치 연산 (opencv 4.12+/pin 4.x 호환) |
+| pinocchio | FK/Jacobian/IK (pip: `pin>=4.1,<5`, numpy 2 호환 — apt ros-humble-pinocchio 금지) |
 | pin-pink | QP 기반 IK (proxqp 백엔드) |
 | proxsuite | QP solver |
 | ur-rtde | UR10e RTDE 통신 (servoJ / URScript 업로드) |
