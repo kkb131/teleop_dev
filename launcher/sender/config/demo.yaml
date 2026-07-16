@@ -1,0 +1,79 @@
+# 조종 PC 런처 검증용 구성 — 헤드셋/로봇/adb 불필요.
+#   web:  python3 -m launcher.sender.web --config launcher/sender/config/demo.yaml
+#         → http://127.0.0.1:19877/
+#
+# mock_runner 가 실제 러너의 로그 계약을 흉내냄:
+#   xr-dual: 'r' 2회 거부 후 3회차 성공 (자동 캘리 재시도 경로)
+#   xr-single-right: 즉시 성공 (무라벨 단일 모드)
+#   xr-single-left: Pose query failed (hard-fail 경로)
+# adb.binary 는 의도적으로 없는 명령 → installed:false 경로 검증
+# (세션은 skip_adb:true 로 시작).
+
+version: 1
+
+network:
+  robot_pc_ip: "127.0.0.1"
+
+vars:
+  teleop_dir: "/workspaces/tamp_ws/src/teleop_dev"
+
+web:
+  host: "127.0.0.1"
+  port: 19877
+  token: ""
+
+defaults:
+  stop_grace_s: 2.0
+
+components:
+  - name: xr-dual-runner
+    group: operator
+    cwd: "${teleop_dir}"
+    command: "python3 -m launcher.sender.mock_runner --fail-first 2 --hz 2"
+    use_pty: true
+
+  - name: xr-single-right-runner
+    group: operator
+    cwd: "${teleop_dir}"
+    command: "python3 -m launcher.sender.mock_runner --single --hz 2"
+    use_pty: true
+
+  - name: xr-single-left-runner
+    group: operator
+    cwd: "${teleop_dir}"
+    command: "python3 -m launcher.sender.mock_runner --single --no-handshake --hz 2"
+    use_pty: true
+
+  - name: cam-viewer
+    group: operator
+    command: "python3 -u -c 'import time,itertools;
+      [print(\"[sender.cam] head: 29.8fps 850KB/s lat=12ms\", flush=True)
+       or time.sleep(2) for i in itertools.count()]'"
+
+runners:
+  - { name: xr-dual,         label: "듀얼 (mock)",        component: xr-dual-runner,         kind: dual }
+  - { name: xr-single-right, label: "싱글 오른쪽 (mock)", component: xr-single-right-runner, kind: single, side: right }
+  - { name: xr-single-left,  label: "싱글 왼쪽 (mock)",   component: xr-single-left-runner,  kind: single, side: left }
+
+params:
+  xr-dual: { file: "scripts/config/xr_dual.yaml", schema: xr_dual }
+
+adb:
+  binary: "definitely-not-adb"     # 미설치 경로 검증
+  reverse_ports: [8013, 8014, 19877]
+  probe_interval_s: 2.0
+
+bridge:
+  port: 18013        # 의도적 unreachable (probe 경로 검증)
+
+cam:
+  component: cam-viewer
+  http_port: 18014
+
+session:
+  default_mode: xr-dual
+  countdown_s: 1.0
+  start_timeout_s: 10.0
+  confirm_timeout_s: 3.0
+  retry_delay_s: 0.5
+  max_retries: 5
