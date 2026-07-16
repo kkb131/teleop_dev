@@ -13,12 +13,12 @@
         [Galaxy XR 헤드셋]  ← 메인 조종 (손 추적 + 손목 pose)
             │ USB-C (adb reverse 8013/8014)
             ▼
-        [조종 PC]───────────────── GUI 런처 (전체 시작/정지/모니터링)
+        [조종 PC]───────────────── 브라우저 → 로봇 웹 대시보드 (시작/정지/상태/E-STOP)
             │  BridgePoseStore(8013) → arm sender ×2 + hand sender ×2
             │
             │ UDP: 9871(오른팔) 9875(왼팔) 9872(오른손) 9874(왼손)
             │ ZMQ 9873 ← 카메라 영상 (robot → 조종)
-            │ HTTP 9876 → 런처 agent (원격 관리)
+            │ HTTP 9876 → 로봇 웹 대시보드 (launcher.robot.web)
             ▼
         [robot PC]
             ├─ arm 수신부 ×2 ──RTDE servoJ──→ UR10e 오른팔(192.168.0.2) / 왼팔(미정)
@@ -34,9 +34,9 @@
 
 | 무엇 | 값 | 비고 |
 |------|-----|------|
-| robot PC | 192.168.0.10 | 런처 yaml `network.robot_pc_ip` |
+| robot PC | 192.168.0.10 | 조종측 xr_dual.yaml `network.robot_pc_ip` |
 | 오른팔 UR10e | 192.168.0.2 | |
-| 왼팔 UR10e | **미정** (placeholder 192.168.0.3) | 확정 시 [teleop_system.yaml](../launcher/config/teleop_system.yaml) + [left.yaml](../robot/arm/admittance/config/left.yaml) 수정 |
+| 왼팔 UR10e | **미정** (placeholder 192.168.0.3) | 확정 시 [robot.yaml](../launcher/robot/config/robot.yaml) + [left.yaml](../robot/arm/admittance/config/left.yaml) 수정 |
 | 오른손 DG5F | 169.254.186.72:502 | Modbus TCP |
 | 왼손 DG5F | 169.254.186.73:502 | Modbus TCP |
 | 헤드셋 pose 브리지 | 조종 PC 8013 (WS) | adb reverse |
@@ -44,7 +44,7 @@
 | 오른팔 / 왼팔 명령 | robot PC 9871 / 9875 (UDP) | |
 | 오른손 / 왼손 명령 | robot PC 9872 / 9874 (UDP) | |
 | 카메라 영상 | robot PC 9873 (ZMQ PUB) | robot → 조종 |
-| 런처 agent | robot PC 9876 (HTTP) | 조종 PC GUI 가 접속 |
+| 런처 웹 대시보드 | robot PC 9876 (HTTP) | 조종 PC 브라우저로 접속 |
 
 ---
 
@@ -55,33 +55,41 @@
 | 조종 PC | conda env + 의존성, adb 설치 | [setup_guide.md](setup_guide.md) |
 | 조종 PC ↔ 헤드셋 | USB-C 연결, `adb devices` 승인 | [xr_input_guide.md](xr_input_guide.md) §2 |
 | robot PC | ROS2 humble + 워크스페이스 빌드, ur_rtde/pinocchio/pink | [setup_guide.md](setup_guide.md) |
-| 현장 값 반영 | robot PC IP / 왼팔 IP / DG5F IP / 경로 | [teleop_system.yaml](../launcher/config/teleop_system.yaml) 상단 주석 |
+| 현장 값 반영 | 왼팔 IP / DG5F IP / 경로 | [robot.yaml](../launcher/robot/config/robot.yaml) 상단 주석 |
 
 ---
 
-## 3. 표준 기동 절차 (통합 런처)
+## 3. 표준 기동 절차
 
-> 상세: [launcher_guide_ko.md](launcher_guide_ko.md)
+> 로봇측 상세: [launcher_guide_ko.md](launcher_guide_ko.md)
 
 ```bash
-# ① robot PC (1회 — 부팅 자동시작 등록 권장)
+# ① robot PC — 웹 대시보드 데몬 (tmux/systemd 상시 실행 권장)
 cd /workspaces/tamp_ws/src/teleop_dev
-python3 -m launcher agent --config launcher/config/teleop_system.yaml
-
-# ② 조종 PC
-cd /workspaces/tamp_ws/src/teleop_dev
-python3 -m launcher gui --config launcher/config/teleop_system.yaml --profile operator
+python3 -m launcher.robot.web
 ```
 
-③ GUI 에서 **▶ Start All** — 순서(드라이버→수신부→sender)는 런처가 보장한다.
-필요 없는 구성요소(예: 왼팔 미배선)는 해당 행만 Stop 해두면 된다.
+② 조종 PC **브라우저** → `http://<robot_pc_ip>:9876/` →
+파츠 카드(팔/손/캠)의 HW dot 초록 확인 → **▶ 전체 시작**
+(드라이버→수신부 순서는 런처가 보장. 필요 없는 파츠는 개별 정지).
+
+```bash
+# ③ 조종 PC — XR sender (터미널)
+cd /workspaces/tamp_ws/src/teleop_dev
+adb reverse tcp:8013 tcp:8013 && adb reverse tcp:8014 tcp:8014
+python3 -m scripts.run_xr_dual_teleop --config scripts/config/xr_dual.yaml \
+    --target-ip <robot_pc_ip>
+```
 
 ④ 헤드셋 Chrome → `http://localhost:8013/` → **Enter VR/AR** → 손을 시야에.
 
-⑤ **캘리브레이션**: 표준 자세(§4)에서 GUI 의 `xr-dual-teleop` 행 선택 →
-키 전송 바 **r (sync)** 클릭. 이 순간부터 손 이동이 로봇으로 전달된다.
+⑤ **캘리브레이션**: 표준 자세(§4)에서 sender 터미널에 **r**.
+이 순간부터 손 이동이 로봇으로 전달된다.
 
-⑥ 종료: **■ Stop All** (sender 부터 역순 정리).
+⑥ 종료: sender 에서 `x` → 대시보드 **■ 전체 정지**.
+
+비상 시: 대시보드 우상단 적색 **E-STOP** (양팔 즉시 정지 + 손 수신부
+정지 — 소프트 스톱이며 물리 E-Stop 을 대체하지 않음).
 
 ---
 
@@ -94,7 +102,7 @@ python3 -m launcher gui --config launcher/config/teleop_system.yaml --profile op
 `r` 을 누른다. 다른 방향을 보고 `r` 을 누르면 모든 손 동작이 그 각도만큼
 돌아간 채로 로봇에 전달된다 (양팔 모두).
 
-### 키 (GUI 키 전송 바 또는 xr-dual-teleop 터미널)
+### 키 (조종 PC 의 xr-dual-teleop 터미널)
 
 | 키 | 동작 |
 |----|------|
@@ -124,7 +132,7 @@ python3 -m launcher gui --config launcher/config/teleop_system.yaml --profile op
 - 팔별 설정 위치:
   - sender 측 (scale/remap/workspace): [scripts/config/xr_dual.yaml](../scripts/config/xr_dual.yaml)
   - robot 측 (IP/포트/안전한계/home): [robot/arm/admittance/config/right.yaml](../robot/arm/admittance/config/right.yaml), [left.yaml](../robot/arm/admittance/config/left.yaml)
-- 한쪽 팔만 쓰는 날: GUI 에서 반대쪽 arm 수신부 행을 Stop, sender 는
+- 한쪽 팔만 쓰는 날: 대시보드에서 반대쪽 팔/손 카드를 정지, sender 는
   `xr_dual.yaml` 의 해당 `enabled: false` 또는 `--only-arm`.
 
 ---
@@ -133,10 +141,11 @@ python3 -m launcher gui --config launcher/config/teleop_system.yaml --profile op
 
 | 상황 | 조작 |
 |------|------|
-| 작업 종료 | GUI ■ Stop All → GUI 닫기 (agent 는 계속 떠 있어도 무방) |
-| sender 만 재시작 | `xr-dual-teleop` 행 Stop → Start → 헤드셋 새로고침 → `r` |
-| 로봇 급정지 | `Space` (소프트) 또는 티치펜던트 E-Stop (하드) |
-| E-Stop 해제 후 | 해당 팔 수신부 로그 확인 → sender 에서 `r` 재캘리 |
+| 작업 종료 | sender `x` → 대시보드 ■ 전체 정지 (웹 데몬은 계속 떠 있어도 무방) |
+| sender 만 재시작 | 터미널에서 `x` 종료 → 재실행 → 헤드셋 새로고침 → `r` |
+| 로봇 급정지 | sender `Space` / 대시보드 **E-STOP** (소프트) 또는 티치펜던트 E-Stop (하드) |
+| E-Stop 해제 후 | 대시보드에서 해당 팔 로그 확인 → sender 에서 `r` 재캘리 (또는 팔 카드 재시작) |
+| 초기 위치 이동 | 대시보드 팔 카드 `초기 위치 이동` (수신부 정지 상태에서 — [launcher_guide_ko.md](launcher_guide_ko.md) §6) |
 
 ---
 
@@ -144,8 +153,8 @@ python3 -m launcher gui --config launcher/config/teleop_system.yaml --profile op
 
 | 증상 | 먼저 볼 곳 |
 |------|-----------|
-| GUI 에 robot 패널이 주황/오류 | [launcher_guide_ko.md](launcher_guide_ko.md) §7 (agent/방화벽) |
-| 구성요소가 빨강(exited) | 행 클릭 → 로그 → [launcher_guide_ko.md](launcher_guide_ko.md) §7 |
+| 대시보드 접속 안 됨 / HW dot 빨강 | [launcher_guide_ko.md](launcher_guide_ko.md) §10 (데몬/방화벽/전원) |
+| 파츠가 빨강(error) | 로그 확인 → [launcher_guide_ko.md](launcher_guide_ko.md) §10 |
 | 헤드셋 접속/Enter VR 안 됨, pose 안 들어옴 | [xr_input_guide.md](xr_input_guide.md) (adb reverse, Chrome 플래그) |
 | 로봇이 손과 다른 방향으로 움직임 (왼팔) | [xr_dual_arm_left_tuning_ko.md](xr_dual_arm_left_tuning_ko.md) §5 처방표 |
 | 모든 동작이 일정 각도 돌아감 | §4 표준 자세로 `r` 재캘리 |
@@ -206,7 +215,7 @@ python3 -m sender.cam.main --robot-ip 192.168.0.10
 | 문서 | 내용 |
 |------|------|
 | **USER_GUIDE_ko.md (이 문서)** | 최상위 — 기동/조종/문제 분류 |
-| [launcher_guide_ko.md](launcher_guide_ko.md) | 통합 런처 상세 |
+| [launcher_guide_ko.md](launcher_guide_ko.md) | 로봇 웹 대시보드/브링업 상세 |
 | [xr_dual_arm_left_tuning_ko.md](xr_dual_arm_left_tuning_ko.md) | 왼팔 좌표계 튜닝/트러블슈팅 |
 | [xr_input_guide.md](xr_input_guide.md) | XR 헤드셋 연결/조작 상세 |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | 개발자용 구조/프로토콜 |

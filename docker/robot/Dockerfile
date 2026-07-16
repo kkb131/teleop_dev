@@ -67,6 +67,8 @@ RUN apt-get update \
 #   proxsuite   - QP solver 백엔드
 #   ur-rtde     - UR 로봇 RTDE 통신 (servoJ + URScript socket)
 #   PyYAML      - YAML 설정 파싱
+#   ruamel.yaml - 런처 웹 대시보드의 파라미터 저장 시 yaml 주석 보존
+#                 (round-trip 편집 — left.yaml 의 한국어 안전 주석 유지)
 #   numpy >=2   - opencv 4.12+ / pin 4.x 호환 (조종 PC conda 는 mediapipe 때문에
 #                 numpy<2 유지 — 머신별 환경이 다른 것이 정상)
 #   pyzmq       - robot/cam D405 컬러 스트리밍 ZMQ PUB (JPEG)
@@ -86,6 +88,7 @@ RUN pip install --no-cache-dir \
     "proxsuite>=0.6.0" \
     "ur-rtde>=1.5.0" \
     "PyYAML>=6.0" \
+    "ruamel.yaml>=0.18" \
     "numpy>=2,<3" \
     "pyzmq>=25" \
     "opencv-python-headless>=4.12" \

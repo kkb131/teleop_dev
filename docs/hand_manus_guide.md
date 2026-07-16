@@ -197,7 +197,7 @@ ln -s /path/to/teleop_dev/sender/hand/sdk/ROS2/manus_ros2_msgs .
 
 #### 3. Integrated mode 사용 시 CMakeLists 수정
 
-[`sender/hand/sdk/ROS2/manus_ros2/CMakeLists.txt:27-28`](../sender/hand/sdk/ROS2/manus_ros2/CMakeLists.txt) 의 link target 이 기본적으로 Remote mode 의 `ManusSDK` 입니다. Integrated mode 를 쓰려면 한 줄 수정:
+[`src/manus_ros2/CMakeLists.txt:27-28`](../../manus_ros2/CMakeLists.txt) 의 link target 이 기본적으로 Remote mode 의 `ManusSDK` 입니다. Integrated mode 를 쓰려면 한 줄 수정:
 
 ```cmake
 # Before
@@ -628,7 +628,7 @@ python3 -m robot.hand.tests.test_tuning --hand right --test zero
 | 4. Sender 시작 | `python3 -m sender.hand.manus_sender --target-ip <로봇IP> --retarget dex --sdk-mode ros2` | (자동 수신, retarget 스킵) |
 | 5. 동작 확인 | `[ManusROS2] Manus skeleton: 25 raw nodes → MANO 21 (remap OK)` 로그 확인 | DG5F 손가락이 즉시 따라가는지 확인 |
 
-자세한 설치/튜닝/트러블슈팅: [`sender/hand/docs/dex_retarget_setup.md`](../sender/hand/docs/dex_retarget_setup.md)
+자세한 설치/튜닝/트러블슈팅: [`sender/hand/gen3a_dex_retarget/docs/dex_retarget_setup.md`](../sender/hand/gen3a_dex_retarget/docs/dex_retarget_setup.md)
 
 ### Mode D: realsense_sender ([3A] dex_retarget — Manus 글러브 미보유 환경)
 

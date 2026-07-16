@@ -1,203 +1,201 @@
-# 통합 실행기 (launcher) 사용 가이드
+# 로봇 PC 런처 가이드 — 브링업 CLI + 웹 대시보드
 
-> dg5f 드라이버, UR10e 수신부, D405 카메라, XR sender 등 여러 터미널에
-> 흩어져 있던 실행을 **GUI 한 곳에서** 시작/정지/모니터링한다.
-> 조종 PC 의 GUI 가 robot PC 의 구성요소까지 원격 관리한다.
+> 로봇 PC 의 팔(UR10e×2)·손(DG5F×2)·캠(D405) 프로세스를
+> **웹 브라우저 한 곳에서** 켜고 끄고 모니터링한다.
+> 조종 PC 에서는 브라우저로 `http://<robot_pc_ip>:9876/` 만 열면 된다.
 
 ---
 
 ## 1. 구조
 
 ```
-조종 PC                                      robot PC
-┌───────────────────────────┐               ┌───────────────────────────┐
-│  python3 -m launcher gui  │   HTTP 9876   │ python3 -m launcher agent │
-│  --profile operator       │ ────────────→ │  (headless 데몬)          │
-│                           │               │                           │
-│  [operator group 로컬 실행]│               │  [robot group 로컬 실행]  │
-│   - adb-reverse           │               │   - dg5f-right/left-driver│
-│   - xr-dual-teleop        │               │   - hand-right/left-recv  │
-│   - cam-viewer            │               │   - arm-right/left-recv   │
-│                           │               │   - cam-server            │
-└───────────────────────────┘               └───────────────────────────┘
+조종 PC (브라우저)                        로봇 PC
+┌────────────────────┐    HTTP 9876    ┌─────────────────────────────────┐
+│ http://robot:9876/ │ ─────────────→  │ python3 -m launcher.robot.web   │
+│  - 파츠 on/off      │                 │  ├─ dg5f-right/left-driver      │
+│  - 상태/로그        │                 │  ├─ hand-right/left-receiver    │
+│  - 초기 위치 이동   │                 │  ├─ arm-right/left-receiver     │
+│  - E-STOP          │                 │  ├─ cam-server                  │
+│  - 파라미터 편집    │                 │  └─ move-home-* (oneshot)       │
+└────────────────────┘                 └─────────────────────────────────┘
 ```
 
-- **launcher 는 기존 코드를 import 하지 않는다.** yaml 에 적힌 명령을
-  subprocess 로 띄울 뿐이므로, launcher 의 버그/변경이 teleop 코드에
-  영향을 주지 않는다 (역도 성립).
-- 의존성: python3 표준 라이브러리 + PyYAML + tkinter (GUI 만).
-  Ubuntu 에서 tkinter 가 없으면 `sudo apt install python3-tk`.
-- 모든 구성요소/IP/포트는 [launcher/config/teleop_system.yaml](../launcher/config/teleop_system.yaml)
-  한 파일에 정의 — **현장 배치 시 이 파일만 수정하면 된다.**
+- **launcher 는 기존 코드를 import 하지 않는다** — yaml 에 정의된 명령을
+  subprocess 로 실행할 뿐. 런처 변경이 teleop 코드에 영향 없음 (역도 성립).
+- 의존성: 표준 라이브러리 + PyYAML (+선택 ruamel.yaml — 파라미터 저장 시
+  yaml 주석 보존. 로봇 도커 이미지에 포함됨).
+- 모든 IP/포트/컴포넌트/파츠는
+  [launcher/robot/config/robot.yaml](../launcher/robot/config/robot.yaml)
+  한 파일이 단일 소스 — **현장 배치 시 이 파일만 수정.**
+- "파츠" = 대시보드 카드 단위: 오른팔 / 왼팔 / 오른손(드라이버+수신부) /
+  왼손 / 카메라.
 
----
+## 2. 실행
 
-## 2. 빠른 시작
-
-### robot PC (1회)
+### 웹 대시보드 (권장 — 로봇 PC 에서 상시 실행)
 
 ```bash
 cd /workspaces/tamp_ws/src/teleop_dev
-python3 -m launcher agent --config launcher/config/teleop_system.yaml
-# → [agent] listening on http://0.0.0.0:9876 ...
+python3 -m launcher.robot.web                 # robot.yaml 사용, 포트 9876
+# 옵션: --config <yaml> --host 0.0.0.0 --port 9876
 ```
 
-부팅 시 자동 시작을 원하면 systemd/rc.local 에 위 명령 등록.
+- 조종 PC 브라우저에서 `http://<robot_pc_ip>:9876/` 접속.
+- 데몬을 **종료하면 관리 중이던 컴포넌트가 전부 정지**된다 (고아 프로세스
+  방지). 상시 운용은 tmux 나 systemd 에 등록 권장:
+  ```bash
+  tmux new -s launcher 'cd /workspaces/tamp_ws/src/teleop_dev && python3 -m launcher.robot.web'
+  ```
 
-### 조종 PC
+### 터미널 브링업 (웹 없이)
 
 ```bash
-cd /workspaces/tamp_ws/src/teleop_dev
-python3 -m launcher gui --config launcher/config/teleop_system.yaml --profile operator
+python3 -m launcher.robot.bringup                      # 전체 (양팔+양손+캠)
+python3 -m launcher.robot.bringup --side right         # 오른쪽만
+python3 -m launcher.robot.bringup --side left --no-cam # 왼쪽만, 캠 제외
+python3 -m launcher.robot.bringup --parts arm-left     # 파츠 직접 지정
+python3 -m launcher.robot.bringup --list               # 선택 결과 확인만
+python3 -m launcher.robot.bringup --dry-run            # 실행될 명령 확인만
 ```
 
-- robot PC 패널 = agent 를 통한 원격 제어, Operator 패널 = 이 PC 로컬 실행.
-- agent 주소는 yaml `network.robot_pc_ip` + `agent.port` 로 계산.
-  다른 주소면 `--agent-url http://<ip>:<port>`.
+- 드라이버 → 수신부 순서(topo + 초기화 지연)로 시작, **Ctrl+C 로 역순 정지**.
+- 웹 데몬과 **동시 실행 불가** (flock 상호배제 — 프로세스 이중 관리 방지).
+  이미 웹이 떠 있으면 안내 메시지와 함께 거부된다.
 
-### 기타 프로파일
+## 3. 메인 대시보드 (`/`)
 
-```bash
-# robot PC 에서 GUI 로 robot 구성요소만 로컬 관리 (agent 불필요)
-python3 -m launcher gui --config ... --profile robot
-
-# PC 한 대에서 전부 로컬 (개발/시뮬)
-python3 -m launcher gui --config ... --profile local
-```
-
----
-
-## 3. GUI 조작
-
-| 요소 | 동작 |
+| 요소 | 설명 |
 |------|------|
-| ● 상태 dot | 초록=running, 파랑=done(oneshot 완료), 회색=stopped, **빨강=exited(비정상 종료 — 로그 확인!)**, 주황=원격 조회 실패 |
-| 행 클릭 | 하단 로그 pane 이 해당 구성요소 tail 로 전환 |
-| Start / Stop | 개별 시작/정지 |
-| ▶ Start All | robot group → operator group 순서로 전체 시작. 그룹 안에서는 `depends_on` 위상 정렬 + `start_delay_s` 준수 (드라이버 → 수신부 → sender) |
-| ■ Stop All | 역순 정지 (sender 먼저 끊고 드라이버 정지) |
-| 키 전송 바 | `use_pty: true` 구성요소 선택 시 활성. **xr-dual-teleop 의 r(sync)/p(pause)/c(recal)/Space(E-Stop)/x(quit) 를 GUI 버튼으로 전달** |
+| 파츠 카드 | 오른팔/왼팔/오른손/왼손/카메라 — 상태 pill + HW 도달성 dot |
+| 상태 pill | `running` 초록 / `stopped` 회색 / `partial` 주황(일부만 실행) / **`error` 빨강(비정상 종료 — 로그 확인!)** |
+| HW dot | 초록=하드웨어 TCP 도달 가능 (UR:30004, DG5F:502), 빨강=도달 불가 (전원/케이블/IP 확인) |
+| 라이브 메트릭 | 팔: EE 위치/RPY·Safety·E-Stop·Input age (수신부 로그 파싱) / 캠: 캠별 fps·KB/s·fail |
+| 시작/정지/재시작 | 파츠 단위 (손 파츠는 드라이버→수신부 순서 자동) |
+| ▶ 전체 시작 / ■ 전체 정지 | 전체 topo 순 / 역순 |
+| **E-STOP** (우상단 적색) | §5 참조 — 모든 페이지 공통 |
+| 초기 위치 이동 (팔 카드) | §6 참조 |
+| 파라미터 → | 팔/캠 파라미터 페이지로 이동 (§7) |
+| 하단 로그 | 컴포넌트 선택 → 실시간 tail |
 
-정지 시맨틱: SIGINT → (`stop_grace_s` 대기) → SIGTERM → (3s) → SIGKILL.
-프로세스 그룹 전체에 신호를 보내므로 `ros2 launch` 의 자식 노드까지 정리된다.
+## 4. 표준 운용 순서
 
-GUI 창을 닫으면 **로컬 구성요소만** 정지된다. robot PC 쪽은 agent 가 계속
-관리하므로 GUI 를 재실행하면 그대로 이어서 보인다. robot 쪽까지 내리려면
-닫기 전에 Stop All.
+1. 로봇 PC: `python3 -m launcher.robot.web` (또는 tmux/systemd 상시 실행 확인)
+2. 조종 PC 브라우저: `http://<robot_pc_ip>:9876/`
+3. HW dot 이 초록인지 확인 (로봇/손 전원·네트워크)
+4. **▶ 전체 시작** (필요 없는 파츠는 개별 정지)
+5. 조종 PC 에서 XR sender 실행:
+   `python3 -m scripts.run_xr_dual_teleop --config scripts/config/xr_dual.yaml --target-ip <robot_pc_ip>`
+6. 작업 종료: sender 종료 (`x`) → 대시보드 **■ 전체 정지**
 
----
+## 5. E-STOP (비상정지)
 
-## 4. 표준 기동 순서 (Galaxy XR 양팔+양손 기준)
+버튼 클릭 시 (확인창 없이 즉시):
 
-1. robot PC: agent 실행 (또는 부팅 자동 시작 확인).
-2. 조종 PC: GUI 실행 → robot 패널이 조회되는지 확인 (배너에 오류 없음).
-3. **▶ Start All**.
-4. `xr-dual-teleop` 행 클릭 → 로그에서 `BridgePoseStore: http://localhost:8013/` 확인.
-5. 헤드셋 Chrome → `http://localhost:8013/` → Enter VR/AR.
-6. 표준 자세에서 GUI 키 전송 바의 **r (sync)** 클릭 (또는 해당 터미널에서 r).
-7. 종료: **■ Stop All**.
+1. 각 팔 수신부의 localhost UDP 포트로 **estop 패킷 burst** (200Hz×0.5s) —
+   수신부가 즉시 `stopScript()` 로 로봇 정지 + E-Stop latch.
+2. 손 수신부 정지 (손은 마지막 자세 유지).
+3. 1초 안에 수신부 로그에서 latch 가 확인되지 않으면 해당 수신부를
+   SIGINT — servoJ 스트림이 끊겨 UR 컨트롤러가 자체 안전 정지.
 
----
+해제: 팔 수신부의 E-Stop latch 는 sender 의 `r`(reset) 또는 수신부
+재시작으로 해제된다. 배너에 전송 결과/경고가 표시된다.
 
-## 5. 설정 파일 (`teleop_system.yaml`) 스키마
+> ⚠️ **소프트 스톱이다.** 티치펜던트의 물리 E-Stop 을 대체하지 않는다 —
+> 실기 운용 시 물리 E-Stop 접근 가능한 인원 배치는 여전히 필수.
 
-```yaml
-network:              # ${var} 치환 소스 + 접속 정보 — IP/포트의 단일 소스
-  robot_pc_ip: "192.168.0.10"
-  agent_port: "9876"
-  right_robot_ip: "192.168.0.2"
-  left_robot_ip: "192.168.0.3"        # TODO: 왼팔 실제 IP
-  right_delto_ip: "169.254.186.72"
-  left_delto_ip: "169.254.186.73"
-vars:                 # 추가 치환 변수
-  teleop_dir: "/workspaces/tamp_ws/src/teleop_dev"
-setups:               # 이름 붙은 shell 스니펫 (환경 소스)
-  ros: "source /opt/ros/humble/setup.bash && source ${ws_dir}/install/setup.bash"
-agent:
-  host: "0.0.0.0"
-  port: 9876
-  token: ""           # 설정 시 GUI/agent 양쪽 동일 토큰 필요 (X-Auth-Token)
-defaults:
-  stop_grace_s: 5.0
-  start_delay_s: 0.0
-components:
-  - name: dg5f-right-driver     # 고유 이름
-    group: robot                # robot | operator — 어느 PC 담당인지
-    setup: [ros]                # 실행 전 소스할 스니펫들
-    cwd: "${teleop_dir}"        # 작업 디렉토리
-    command: "ros2 launch ..."  # 실제 명령 (${var} 치환됨)
-    depends_on: []              # Start All 순서 제약
-    start_delay_s: 3.0          # 시작 후 다음 것 시작까지 대기
-    stop_grace_s: 5.0           # SIGINT 후 대기 시간
-    use_pty: false              # 키 입력 필요한 프로세스 (termios)
-    oneshot: false              # true 면 rc=0 종료가 "done" (adb reverse 등)
-    env: {}                     # 추가 환경변수
+## 6. 초기 위치 이동
+
+팔 카드(또는 팔 페이지)의 `초기 위치 이동` 버튼:
+
+- 팔 yaml 의 `initial_pose.joint_values` 로 **moveJ** 하는 oneshot 프로세스
+  (`move-home-<side>`) 를 실행. 진행/결과는 카드 메트릭과 로그에 표시.
+- **수신부가 실행 중이면 거부** (RTDE 제어 연결은 하나만 가능) —
+  확인창에서 "정지 후 이동" 을 선택하면 수신부를 정지하고 진행한다.
+- **`initial_pose.enabled: false` 면 이동 자체가 거부**된다 (exit 2).
+  왼팔은 home 실측 전까지 이 상태가 기본 —
+  [xr_dual_arm_left_tuning_ko.md](xr_dual_arm_left_tuning_ko.md) §6 절차로
+  실측 후 파라미터 페이지에서 joint_values 기입 + enabled 전환.
+- 속도/가속은 robot.yaml `move_home:` 섹션 (왼팔은 보수적 기본값).
+
+## 7. 파라미터 페이지
+
+메인 카드의 `파라미터 →` 로 진입. **저장 → 해당 파츠 재시작** 시 적용된다
+(모든 config 는 프로세스 시작 시 1회만 로드됨 — 저장 후 배너의 안내에 따라
+재시작 버튼 사용).
+
+### 팔 (`/arm?side=right|left`) — 대상: `robot/arm/admittance/config/{right,left}.yaml`
+
+| 파라미터 | 의미 |
+|----------|------|
+| robot.ip | UR10e 주소 |
+| input.unified_port | UDP 수신 포트 — sender(xr_dual.yaml)의 해당 팔 port 와 일치 필요 |
+| filter.alpha_position / orientation | 필터 반응성 (0~1, 높을수록 빠름) |
+| safety.max_joint_vel / max_ee_velocity ⚠ | 속도 한계 (주황 = 안전 관련) |
+| safety.workspace.x/y/z ⚠ | base_link 기준 작업영역 [min, max] |
+| admittance.default_preset | STIFF/MEDIUM/SOFT/FREE |
+| admittance.max_displacement_trans/rot | 외력 순응 최대 변위 |
+| initial_pose.enabled / joint_values / move_duration_s ⚠ | 초기 자세 (§6) |
+
+편집 화이트리스트 밖의 키(IK cost 등)는 yaml 직접 편집. 저장은 주석을
+보존한다 (ruamel.yaml — 미설치 환경이면 주석 유실 경고 배너 표시).
+
+### 캠 (`/cam`) — 대상: `robot/cam/config/default.yaml`
+
+- stream.port (조종측 sender.cam zmq.port 와 일치), stream.jpeg_quality
+- cameras 행 편집: name(ZMQ topic)/serial(빈값=자동)/width/height/fps —
+  행 추가/삭제로 다중 캠 구성. 시리얼 확인: `python3 -m robot.cam.list_cameras`
+- 상태 표: 캠별 fps/KB/s/fail (2s 주기 갱신), stats 정지 시 stale 표시
+- 영상 미리보기는 ZMQ 라 브라우저 불가 — 조종 PC 의
+  `python3 -m sender.cam.main` → `http://localhost:8014/` 사용
+
+## 8. HTTP API (자동화/스크립트용)
+
+```
+GET  /api/health                    파츠/컴포넌트 목록
+GET  /api/status                    전체 상태 스냅샷 (1s 폴링용)
+POST /api/parts/<name>/start|stop|restart
+POST /api/start_all | /api/stop_all
+POST /api/estop                     body {"sides": ["right","left"]} (생략 시 양팔)
+POST /api/arms/<side>/move_home     body {"stop_receiver": true|false} → 200/409
+GET  /api/components/<name>/log?since=<seq>&max=200
+GET  /api/params/<arm-right|arm-left|cam>
+PUT  /api/params/<target>           body {"values": {"safety.max_joint_vel": 0.4}}
 ```
 
-### 구성요소 추가 예시
+인증: robot.yaml `web.token` 설정 시 `X-Auth-Token` 헤더 또는 `?token=`
+쿼리 필수 (브라우저는 최초 1회 `?token=...` 접속 → localStorage 저장).
+HTTPS: `web.tls_cert`/`web.tls_key` 지정 시.
 
-D405 뷰어를 하나 더 띄우고 싶다면:
-
-```yaml
-  - name: my-extra-tool
-    group: operator
-    cwd: "${teleop_dir}"
-    command: "python3 -m sender.cam.main --robot-ip ${robot_pc_ip} --http-port 8015"
-    depends_on: [adb-reverse]
-```
-
-저장 후 GUI/agent 재시작 (설정은 시작 시 1회 로드).
-
-### conda 환경을 쓰는 PC
-
-```yaml
-setups:
-  conda: "source ~/miniconda3/etc/profile.d/conda.sh && conda activate teleop_operator"
-components:
-  - name: xr-dual-teleop
-    setup: [conda]        # ← 추가
-    ...
-```
-
----
-
-## 6. 하드웨어 없이 동작 검증 (데모 구성)
+## 9. 하드웨어 없이 검증 (데모 구성)
 
 ```bash
-# 터미널 1 (agent 역할)
-python3 -m launcher agent --config launcher/config/demo_local.yaml
-# 터미널 2 (GUI) — 같은 PC 에서 원격 흐름까지 검증
-python3 -m launcher gui --config launcher/config/demo_local.yaml \
-    --profile operator --agent-url http://127.0.0.1:19876
+python3 -m launcher.robot.web --config launcher/robot/config/demo.yaml
+# → http://127.0.0.1:19876/
 ```
 
-demo-driver/receiver (무한 tick), demo-oneshot, demo-pty (키 에코) 로
-Start All / 로그 tail / 키 전송 / Stop All 흐름을 안전하게 연습할 수 있다.
+더미 컴포넌트(admittance 상태블록 모사 포함)와 합성 카메라 2대로 카드
+on/off, 메트릭 파싱, E-STOP(백스톱), 파라미터 저장, 로그 tail 을 모두
+연습할 수 있다. 단위테스트:
+`python3 -m unittest launcher.robot.tests.test_status_params`
 
----
+## 10. 트러블슈팅
 
-## 7. 트러블슈팅
+| 증상 | 확인 |
+|------|------|
+| 브라우저 접속 안 됨 | 로봇 PC 에서 web 데몬 실행 중? 방화벽 9876 허용? `curl http://<ip>:9876/api/health` |
+| 401 오류 | `web.token` 설정됨 — `?token=...` 로 접속하거나 헤더 지정 |
+| "다른 런처 관리자가 관리 중" | bringup CLI 와 web 은 동시 실행 불가 — 하나를 종료 |
+| 파츠가 error(빨강) | 로그 확인. 흔한 원인: ROS 미소스(setups.ros 경로), 모듈 없음(cwd), 장치 미연결 |
+| HW dot 빨강 | 로봇/손 전원·케이블·IP (robot.yaml network 섹션) 확인 |
+| 팔 메트릭이 "(라이브 상태 없음)" | 수신부가 상태블록을 아직 안 찍음 (기동 직후) — 몇 초 대기 |
+| 캠 stale 표시 | 캠 프로세스는 살아있으나 stats 정지 — USB/전원 확인 후 재시작 |
+| E-STOP 후 팔이 안 움직임 | 정상 (latch) — sender `r` 또는 수신부 재시작으로 해제 |
+| move_home 409 | 수신부 실행 중 — 확인창에서 "정지 후 이동" 또는 수신부 정지 후 재시도 |
+| move_home exit 2 | `initial_pose.enabled: false` — 왼팔 튜닝 가이드 §6 선행 |
+| 파라미터 저장했는데 동작 그대로 | 재시작해야 적용 — 배너의 재시작 버튼 |
 
-| 증상 | 확인 사항 |
-|------|-----------|
-| 배너 "agent 연결 실패", robot 행 주황색 | robot PC 에서 agent 실행 중? `curl http://<robot_ip>:9876/api/health`. 방화벽에서 9876 허용? `network.robot_pc_ip` 값 정확? |
-| 401 오류 | agent yaml 의 `agent.token` 과 GUI 쪽 config 가 다른 파일/값 — 같은 yaml 을 양쪽에서 사용할 것 |
-| 구성요소가 시작 직후 빨강(exited) | 행 클릭 → 로그 확인. 대부분: ros 미소스 (setup 스니펫 경로), python 모듈 없음 (cwd 잘못), 장치 미연결 |
-| `ros2: command not found` 로그 | `setups.ros` 의 setup.bash 경로가 그 PC 에 맞는지 확인 |
-| dg5f 드라이버는 도는데 receiver 가 죽음 | receiver 는 드라이버 초기화 후 떠야 함 — `depends_on` + `start_delay_s` 확인 |
-| Stop 눌러도 안 죽음 | `stop_grace_s` 후 SIGTERM→SIGKILL 로 강제 종료됨 (최대 grace+5s). 로그 마지막 줄 `── killed (SIGKILL) ──` 확인 |
-| 키 전송 바가 비활성 | 해당 구성요소에 `use_pty: true` 필요 + 행을 클릭해 선택했는지 확인 |
-| GUI 자체가 안 뜸 (`no display name`) | SSH 환경 — `ssh -X` 또는 해당 PC 로컬 세션에서 실행. headless robot PC 는 GUI 대신 agent 를 쓰는 구조 |
-| adb-reverse 가 빨강 | 헤드셋 USB 연결 + `adb devices` 승인 확인 후 해당 행 Start 재시도 |
+## 11. 보안
 
-로그는 구성요소당 최근 2000줄이 메모리에 유지된다 (파일 저장 없음 —
-장기 보관이 필요하면 해당 프로세스를 수동 실행으로 전환).
-
----
-
-## 8. 보안 주의
-
-agent HTTP API 는 인증 없이(기본값) 프로세스 실행/정지가 가능하다.
-**신뢰할 수 있는 로봇 전용 LAN 에서만 사용**하고, 공유 네트워크라면:
-1. `agent.token` 설정 (긴 랜덤 문자열),
-2. 방화벽에서 9876 을 조종 PC IP 로만 허용.
+기본값(token 없음)에서는 접속자 누구나 로봇 프로세스를 제어할 수 있다.
+**신뢰할 수 있는 로봇 전용 LAN 에서만 사용**하고, 공유망이면
+`web.token` 설정 + 방화벽에서 9876 을 조종 PC IP 로 제한할 것.
