@@ -13,7 +13,7 @@
         [Galaxy XR 헤드셋]  ← 메인 조종 (손 추적 + 손목 pose)
             │ USB-C (adb reverse 8013/8014)
             ▼
-        [조종 PC]───────────────── 브라우저 → 로봇 웹 대시보드 (시작/정지/상태/E-STOP)
+        [조종 PC]── 런처 9877 (러너/adb/자동캘리) + 브라우저 → 로봇 런처 9876
             │  BridgePoseStore(8013) → arm sender ×2 + hand sender ×2
             │
             │ UDP: 9871(오른팔) 9875(왼팔) 9872(오른손) 9874(왼손)
@@ -44,7 +44,8 @@
 | 오른팔 / 왼팔 명령 | robot PC 9871 / 9875 (UDP) | |
 | 오른손 / 왼손 명령 | robot PC 9872 / 9874 (UDP) | |
 | 카메라 영상 | robot PC 9873 (ZMQ PUB) | robot → 조종 |
-| 런처 웹 대시보드 | robot PC 9876 (HTTP) | 조종 PC 브라우저로 접속 |
+| 로봇 런처 대시보드 | robot PC 9876 (HTTP) | 조종 PC 브라우저로 접속 |
+| 조종 런처 대시보드 | 조종 PC 9877 (HTTP) | 헤드셋 브라우저에서도 접속 (adb reverse) |
 
 ---
 
@@ -74,19 +75,22 @@ python3 -m launcher.robot.web
 (드라이버→수신부 순서는 런처가 보장. 필요 없는 파츠는 개별 정지).
 
 ```bash
-# ③ 조종 PC — XR sender (터미널)
+# ③ 조종 PC — 조종 런처 데몬 (상시 실행 권장)
 cd /workspaces/tamp_ws/src/teleop_dev
-adb reverse tcp:8013 tcp:8013 && adb reverse tcp:8014 tcp:8014
-python3 -m scripts.run_xr_dual_teleop --config scripts/config/xr_dual.yaml \
-    --target-ip <robot_pc_ip>
+python3 -m launcher.sender.web
 ```
 
-④ 헤드셋 Chrome → `http://localhost:8013/` → **Enter VR/AR** → 손을 시야에.
+④ 조종 런처 `http://localhost:9877/` (헤드셋 Chrome 에서도 동일 주소) →
+모드 선택(듀얼/싱글) → **▶ 조종 시작 (자동 캘리)** — adb reverse →
+러너 시작 → 4초 카운트다운 → 자동 캘리브레이션까지 한 번에 진행된다.
 
-⑤ **캘리브레이션**: 표준 자세(§4)에서 sender 터미널에 **r**.
-이 순간부터 손 이동이 로봇으로 전달된다.
+⑤ 헤드셋 Chrome 다른 탭 → `http://localhost:8013/` → **Enter VR/AR** →
+표준 자세(§4)로 손을 시야에. 캘리는 자동 재시도되며, 수동으로 하려면
+웹 키패드의 **r** (또는 터미널 실행 시 키보드 r).
 
-⑥ 종료: sender 에서 `x` → 대시보드 **■ 전체 정지**.
+⑥ 종료: 조종 런처에서 러너 **정지** → 로봇 대시보드 **■ 전체 정지**.
+
+> 터미널 방식(런처 없이)도 그대로 가능: §9 부록 참조.
 
 비상 시: 대시보드 우상단 적색 **E-STOP** (양팔 즉시 정지 + 손 수신부
 정지 — 소프트 스톱이며 물리 E-Stop 을 대체하지 않음).
@@ -102,7 +106,7 @@ python3 -m scripts.run_xr_dual_teleop --config scripts/config/xr_dual.yaml \
 `r` 을 누른다. 다른 방향을 보고 `r` 을 누르면 모든 손 동작이 그 각도만큼
 돌아간 채로 로봇에 전달된다 (양팔 모두).
 
-### 키 (조종 PC 의 xr-dual-teleop 터미널)
+### 키 (조종 런처 웹 키패드 또는 러너 터미널)
 
 | 키 | 동작 |
 |----|------|
@@ -112,6 +116,14 @@ python3 -m scripts.run_xr_dual_teleop --config scripts/config/xr_dual.yaml \
 | `Space` | **E-Stop** (양팔 즉시 정지) |
 | `+` / `-` | robot 측 속도 프리셋 증감 |
 | `x` / `q` / Esc | 전체 종료 |
+
+### 제스처 (opt-in — 헤드셋 안에서 키 없이, 기본 off)
+
+파라미터 페이지(9877 `/params`)에서 `gestures.enabled` 활성 + 러너 재시작:
+**양손 동시** pinch 1.5초 유지 = `r` (캘리) / **양손 동시** squeeze 1.5초
+유지 = `p` (일시정지 토글). ⚠ 파지 작업 중 오발동 가능 — 양손 동시로
+물체를 자주 집는 작업이면 끄고 웹 키패드 사용
+([launcher_guide_ko.md](launcher_guide_ko.md) §16).
 
 ### 운용 요령
 
@@ -142,7 +154,7 @@ python3 -m scripts.run_xr_dual_teleop --config scripts/config/xr_dual.yaml \
 | 상황 | 조작 |
 |------|------|
 | 작업 종료 | sender `x` → 대시보드 ■ 전체 정지 (웹 데몬은 계속 떠 있어도 무방) |
-| sender 만 재시작 | 터미널에서 `x` 종료 → 재실행 → 헤드셋 새로고침 → `r` |
+| 러너만 재시작 | 조종 런처(9877)에서 정지 → 조종 시작 (자동 캘리 포함) |
 | 로봇 급정지 | sender `Space` / 대시보드 **E-STOP** (소프트) 또는 티치펜던트 E-Stop (하드) |
 | E-Stop 해제 후 | 대시보드에서 해당 팔 로그 확인 → sender 에서 `r` 재캘리 (또는 팔 카드 재시작) |
 | 초기 위치 이동 | 대시보드 팔 카드 `초기 위치 이동` (수신부 정지 상태에서 — [launcher_guide_ko.md](launcher_guide_ko.md) §6) |

@@ -211,6 +211,10 @@ python3 -m scripts.run_xr_dual_teleop --config scripts/config/xr_dual.yaml \
     --target-ip 192.168.0.10
 # 왼팔 첫 가동 전 필독: docs/xr_dual_arm_left_tuning_ko.md
 
+# 웹 기반 (권장): 조종 런처가 adb reverse/러너/자동 캘리를 대신 수행
+# python3 -m launcher.sender.web → http://localhost:9877/ (헤드셋에서도 접속)
+# → docs/launcher_guide_ko.md 2부
+
 # 정상속 (검증 후)
 python3 -m scripts.run_xr_teleop --target-ip 192.168.0.10 --scale 1.0
 
