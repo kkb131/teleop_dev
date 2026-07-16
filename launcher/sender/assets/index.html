@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>XR Teleop (조종 PC)</title>
+  <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body data-page="index">
+  <header>
+    <h1><a href="/">🎮 XR Teleop 조종</a></h1>
+    <a href="/params"><button>파라미터 →</button></a>
+    <div class="spacer"></div>
+    <span id="ws-dot" class="dot" title="헤드셋 WS"></span>
+    <span style="font-size:12px;color:var(--muted)">헤드셋</span>
+  </header>
+  <div id="banner"></div>
+
+  <main>
+    <div class="grid">
+      <!-- 세션 (자동 캘리) -->
+      <div class="card" id="session-card">
+        <h2>조종 세션 <span id="session-pill" class="pill idle">idle</span></h2>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap">
+          <select id="mode-select"></select>
+          <button id="session-start" class="big start-session">▶ 조종 시작 (자동 캘리)</button>
+          <button id="session-cancel">취소</button>
+        </div>
+        <div style="display:flex; gap:16px; align-items:center; margin-top:10px">
+          <div class="countdown-num" id="countdown">&nbsp;</div>
+          <div>
+            <div id="session-attempt" style="font-size:13px;color:var(--muted)"></div>
+            <div class="session-msg" id="session-msg"></div>
+          </div>
+        </div>
+        <ul class="history" id="session-history"></ul>
+      </div>
+
+      <!-- 러너 + 키패드 -->
+      <div class="card">
+        <h2>XR 러너 <span id="runner-pill" class="pill stopped">stopped</span>
+            <span id="runner-mode" style="font-size:12px;color:var(--muted)"></span></h2>
+        <div class="btns">
+          <button id="runner-start" class="primary">시작</button>
+          <button id="runner-stop">정지</button>
+        </div>
+        <div class="kv" id="runner-live" style="margin-top:10px">—</div>
+        <div class="keypad">
+          <button data-key="r">r<span class="sub">캘리/시작</span></button>
+          <button data-key="p">p<span class="sub">일시정지</span></button>
+          <button data-key="c">c<span class="sub">즉시 재캘리</span></button>
+          <button data-key="space" class="estopish">Space<span class="sub">E-Stop</span></button>
+          <button data-key="+">+<span class="sub">속도↑</span></button>
+          <button data-key="-">−<span class="sub">속도↓</span></button>
+          <button data-key="x">x<span class="sub">종료</span></button>
+        </div>
+      </div>
+
+      <!-- ADB -->
+      <div class="card">
+        <h2>헤드셋 연결 (adb) <span id="adb-pill" class="pill stopped">?</span></h2>
+        <div class="kv" id="adb-live">—</div>
+        <div class="btns">
+          <button id="adb-reverse" class="primary">reverse 설정</button>
+          <button id="adb-restart" class="warn">adb 서버 재시작</button>
+        </div>
+        <pre class="out" id="adb-out" style="display:none"></pre>
+      </div>
+
+      <!-- 카메라 뷰어 -->
+      <div class="card">
+        <h2>카메라 뷰어 <span id="cam-pill" class="pill stopped">stopped</span></h2>
+        <div class="btns">
+          <button id="cam-start" class="primary">시작</button>
+          <button id="cam-stop">정지</button>
+          <a id="cam-link" href="http://localhost:8014/" target="_blank"><button>영상 보기 →</button></a>
+        </div>
+        <table class="plain" id="cam-stats" style="margin-top:10px"></table>
+      </div>
+    </div>
+
+    <div class="logpanel">
+      <div class="bar">
+        <span>로그:</span>
+        <select id="log-select"></select>
+        <button id="log-clear">지우기</button>
+      </div>
+      <pre id="log"></pre>
+    </div>
+  </main>
+
+  <script src="/assets/app.js"></script>
+</body>
+</html>
