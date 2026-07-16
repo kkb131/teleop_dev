@@ -50,6 +50,7 @@ import yaml
 
 from sender.arm.xr_frame_align import remap_from_rpy_deg, validate_remap
 from sender.xr_common import BridgePoseStore
+from sender.xr_common.gesture_commands import GestureCommander, GestureConfig
 from sender.xr_common.watchdog import StoreWatchdog, WorkspaceLimits
 
 
@@ -83,6 +84,7 @@ class DualTeleopConfig:
     enforce_workspace: bool = True
     arms: List[ArmSideCfg] = field(default_factory=list)
     hands: List[HandSideCfg] = field(default_factory=list)
+    gestures: GestureConfig = field(default_factory=GestureConfig)
 
 
 def _resolve_remap(side: str, d: dict) -> Optional[np.ndarray]:
@@ -123,6 +125,13 @@ def load_dual_config(path: str) -> DualTeleopConfig:
     saf = data.get("safety", {})
     cfg.watchdog_timeout_s = float(saf.get("watchdog_timeout_s", cfg.watchdog_timeout_s))
     cfg.enforce_workspace = bool(saf.get("enforce_workspace", cfg.enforce_workspace))
+
+    ges = data.get("gestures", {}) or {}
+    cfg.gestures = GestureConfig(
+        enabled=bool(ges.get("enabled", False)),
+        hold_s=float(ges.get("hold_s", 1.5)),
+        refractory_s=float(ges.get("refractory_s", 3.0)),
+    )
 
     for side in ("right", "left"):
         a = data.get("arms", {}).get(side)
@@ -302,6 +311,14 @@ def main() -> int:
                         help="모든 팔 scale override (yaml 값 대신)")
     parser.add_argument("--no-keyboard", action="store_true",
                         help="termios 비활성 (headless). 각 팔이 자동 calibrate 재시도")
+    ges_group = parser.add_mutually_exclusive_group()
+    ges_group.add_argument("--gestures", dest="gestures", action="store_true",
+                           default=None,
+                           help="양손 제스처 명령 활성 (yaml gestures.enabled override). "
+                                "양손 pinch hold='r', 양손 squeeze hold='p'")
+    ges_group.add_argument("--no-gestures", dest="gestures", action="store_false",
+                           default=None,
+                           help="양손 제스처 명령 비활성 (yaml override)")
     args = parser.parse_args()
 
     cfg = load_dual_config(args.config)
@@ -385,6 +402,22 @@ def main() -> int:
 
     for t in arm_threads + hand_threads:
         t.start()
+
+    # 3.5) 양손 제스처 명령 (opt-in) — 키를 양팔 queue 에 broadcast
+    if args.gestures is not None:
+        cfg.gestures.enabled = args.gestures
+    if cfg.gestures.enabled:
+        if key_queues:
+            gesture = GestureCommander(
+                store,
+                emit=lambda ch: [q_.put(ch) for q_ in key_queues],
+                cfg=cfg.gestures,
+                stop_event=stop_event,
+            )
+            gesture.start()
+        else:
+            print("[gesture] key_queue 없음 (--no-keyboard 또는 팔 비활성) — "
+                  "제스처 비활성", flush=True)
 
     # 4) main thread — 키 dispatcher (또는 headless 대기)
     try:

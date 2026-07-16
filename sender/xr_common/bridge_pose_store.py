@@ -233,6 +233,10 @@ class BridgePoseStore:
         self._head_msg_count = 0
         self._hand_msg_count = 0
         self._last_msg_time = 0.0
+        # per-hand 마지막 hand msg 시각 — 제스처 명령(gesture_commands)의
+        # 신선도 검사용: 트래킹 유실 시 pinch/squeeze bool 이 마지막 값으로
+        # 동결되므로, 손별 msg 신선도 없이는 제스처 판정이 위험하다.
+        self._last_hand_msg_times = {"left": 0.0, "right": 0.0}
         self._stats_lock = threading.Lock()
 
         # ── start ws server in background thread ────────────────────────
@@ -322,14 +326,17 @@ class BridgePoseStore:
             with self._stats_lock:
                 self._head_msg_count += 1
         elif t == "hand":
+            handedness = payload["handedness"]
             self._update_hand(
-                payload["handedness"],
+                handedness,
                 payload["wrist"],
                 payload["positions"],
                 payload.get("orientations"),
             )
             with self._stats_lock:
                 self._hand_msg_count += 1
+                if handedness in self._last_hand_msg_times:
+                    self._last_hand_msg_times[handedness] = time.perf_counter()
         with self._stats_lock:
             self._msg_count += 1
             self._last_msg_time = time.perf_counter()
@@ -498,6 +505,7 @@ class BridgePoseStore:
             self._head_msg_count = 0
             self._hand_msg_count = 0
             self._last_msg_time = 0.0
+            self._last_hand_msg_times = {"left": 0.0, "right": 0.0}
 
     def close(self) -> None:
         """daemon thread 라 main 종료 시 자동 cleanup."""
@@ -510,6 +518,8 @@ class BridgePoseStore:
                 "head_msg_count": self._head_msg_count,
                 "hand_msg_count": self._hand_msg_count,
                 "last_msg_time": self._last_msg_time,
+                "last_left_hand_msg_time": self._last_hand_msg_times["left"],
+                "last_right_hand_msg_time": self._last_hand_msg_times["right"],
                 "port": self._port,
             }
 

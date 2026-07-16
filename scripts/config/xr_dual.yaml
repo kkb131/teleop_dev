@@ -21,6 +21,16 @@ safety:
   watchdog_timeout_s: 0.2       # BridgePoseStore stale 판정
   enforce_workspace: true
 
+# 양손 제스처 → 키 명령 (기본 off — 파지 중 pinch 는 자연 발생하므로 주의)
+#   양손 동시 pinch  hold_s 유지 → 'r' (캘리브레이션/시작)
+#   양손 동시 squeeze hold_s 유지 → 'p' (일시정지 토글)
+# 오발동 방지: 양손 동시 + 유지시간 + 불응기 + 손별 트래킹 신선도.
+# CLI --gestures / --no-gestures 로 override 가능.
+gestures:
+  enabled: false
+  hold_s: 1.5
+  refractory_s: 3.0
+
 arms:
   right:
     enabled: true
