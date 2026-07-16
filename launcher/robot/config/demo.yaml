@@ -1,0 +1,95 @@
+# 런처 자체 검증용 구성 — 로봇/ROS 하드웨어 불필요.
+#   bringup: python3 -m launcher.robot.bringup --config launcher/robot/config/demo.yaml
+#   web:     python3 -m launcher.robot.web --config launcher/robot/config/demo.yaml
+#
+# cam-server 는 실제 robot.cam.main 을 합성 카메라 2대로 실행 —
+# 캠 fps/kbps 상태 파싱 경로까지 실검증됨 (pyzmq/opencv 필요).
+
+version: 2
+
+network:
+  right_robot_ip: "127.0.0.1"
+  left_robot_ip:  "127.0.0.1"
+
+vars:
+  teleop_dir: "/workspaces/tamp_ws/src/teleop_dev"
+
+setups:
+  hello: "echo '[setup] hello snippet'"
+
+web:
+  host: "127.0.0.1"
+  port: 19876
+  token: ""
+
+defaults:
+  stop_grace_s: 2.0
+
+components:
+  - name: dg5f-right-driver
+    group: robot
+    setup: [hello]
+    command: "python3 -u -c 'import time,itertools;
+      [print(\"driver tick\", i, flush=True) or time.sleep(1) for i in itertools.count()]'"
+    start_delay_s: 1.0
+
+  - name: hand-right-receiver
+    group: robot
+    command: "python3 -u -c 'import time,itertools;
+      [print(\"receiver tick\", i, flush=True) or time.sleep(1) for i in itertools.count()]'"
+    depends_on: [dg5f-right-driver]
+
+  # 팔 수신부 대역 — 실제 admittance 상태블록 포맷을 흉내내 파서 경로 검증
+  - name: arm-right-receiver
+    group: robot
+    command: "python3 -u -c 'import time,itertools;
+      [print(\"\\x1b[8A\\r  EE Pos : x= 0.5000  y=-0.1000  z= 0.4000 m\\n\\r  EE RPY : R=  10.0  P= -20.0  Y=  30.0 deg\\n\\r  Safety : OK  \\n\\r  E-Stop : off (Space: trigger)\\n\\r  Input  : 45ms ago  |  rtde 125Hz\", flush=True) or time.sleep(0.5) for i in itertools.count()]'"
+
+  - name: arm-left-receiver
+    group: robot
+    command: "python3 -u -c 'import time,itertools;
+      [print(\"left arm idle\", i, flush=True) or time.sleep(1) for i in itertools.count()]'"
+
+  - name: cam-server
+    group: robot
+    cwd: "${teleop_dir}"
+    command: "python3 -m robot.cam.main --synthetic 2 --port 19873"
+
+parts:
+  - name: arm-right
+    label: "오른팔"
+    kind: arm
+    side: right
+    components: [arm-right-receiver]
+    probe: { host: "127.0.0.1", port: 1 }      # 의도적 unreachable (probe 경로 검증)
+    params: { file: "robot/arm/admittance/config/right.yaml", schema: arm }
+
+  - name: arm-left
+    label: "왼팔"
+    kind: arm
+    side: left
+    components: [arm-left-receiver]
+    probe: { host: "127.0.0.1", port: 1 }
+    params: { file: "robot/arm/admittance/config/left.yaml", schema: arm }
+
+  - name: hand-right
+    label: "오른손"
+    kind: hand
+    side: right
+    components: [dg5f-right-driver, hand-right-receiver]
+    probe: { host: "127.0.0.1", port: 1 }
+
+  - name: cam
+    label: "카메라"
+    kind: cam
+    components: [cam-server]
+    params: { file: "robot/cam/config/default.yaml", schema: cam }
+
+estop:
+  burst_hz: 200
+  burst_duration_s: 0.3
+  fallback_arm_ports: { right: 19871, left: 19875 }
+
+move_home:
+  right: { config: "robot/arm/admittance/config/right.yaml", robot_ip: "127.0.0.1", speed: 0.3, accel: 0.3 }
+  left:  { config: "robot/arm/admittance/config/left.yaml",  robot_ip: "127.0.0.1", speed: 0.2, accel: 0.2 }

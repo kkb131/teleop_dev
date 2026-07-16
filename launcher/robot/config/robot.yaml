@@ -1,0 +1,131 @@
+# 로봇 PC 런처 구성 — 전체 IP/포트/컴포넌트/파츠의 단일 소스.
+# 사용법: docs/launcher_guide_ko.md
+#
+# ⚠️ 현장 배치 시 확인:
+#   - network.left_robot_ip : 왼팔 UR10e 실제 IP (현재 placeholder)
+#   - vars.teleop_dir / ws_dir : 이 PC 의 실제 경로
+#   - setups.ros : ROS 환경 소스 방법
+
+version: 2
+
+network:
+  right_robot_ip: "192.168.0.2"    # 오른팔 UR10e
+  left_robot_ip:  "192.168.0.3"    # 왼팔 UR10e (TODO: 실측 IP 로 교체)
+  right_delto_ip: "169.254.186.72" # 오른손 DG5F (Modbus)
+  left_delto_ip:  "169.254.186.73" # 왼손 DG5F (Modbus)
+
+vars:
+  teleop_dir: "/workspaces/tamp_ws/src/teleop_dev"
+  ws_dir: "/workspaces/tamp_ws"
+
+setups:
+  ros: "source /opt/ros/humble/setup.bash && source ${ws_dir}/install/setup.bash"
+
+web:                    # python3 -m launcher.robot.web 바인딩
+  host: "0.0.0.0"
+  port: 9876
+  token: ""             # 비-신뢰 네트워크면 토큰 설정 (X-Auth-Token / ?token=)
+  tls_cert: ""          # tls_cert+tls_key 지정 시 HTTPS
+  tls_key: ""
+
+defaults:
+  stop_grace_s: 5.0
+  start_delay_s: 0.0
+
+# ── 프로세스 (컴포넌트) ─────────────────────────────────────────────────
+components:
+  - name: dg5f-right-driver
+    group: robot
+    setup: [ros]
+    command: "ros2 launch dg5f_driver dg5f_right_pid_all_controller.launch.py delto_ip:=${right_delto_ip}"
+    start_delay_s: 3.0             # 드라이버 초기화 후 receiver 시작
+
+  - name: dg5f-left-driver
+    group: robot
+    setup: [ros]
+    command: "ros2 launch dg5f_driver dg5f_left_pid_all_controller.launch.py delto_ip:=${left_delto_ip}"
+    start_delay_s: 3.0
+
+  - name: hand-right-receiver
+    group: robot
+    setup: [ros]
+    cwd: "${teleop_dir}"
+    command: "python3 -m robot.hand.receiver --hand right --port 9872"
+    depends_on: [dg5f-right-driver]
+
+  - name: hand-left-receiver
+    group: robot
+    setup: [ros]
+    cwd: "${teleop_dir}"
+    command: "python3 -m robot.hand.receiver --hand left --port 9874"
+    depends_on: [dg5f-left-driver]
+
+  - name: arm-right-receiver
+    group: robot
+    cwd: "${teleop_dir}"
+    command: "python3 -m robot.arm.admittance.main --mode rtde --input unified --config robot/arm/admittance/config/right.yaml --robot-ip ${right_robot_ip}"
+
+  - name: arm-left-receiver
+    group: robot
+    cwd: "${teleop_dir}"
+    command: "python3 -m robot.arm.admittance.main --mode rtde --input unified --config robot/arm/admittance/config/left.yaml --robot-ip ${left_robot_ip}"
+
+  - name: cam-server
+    group: robot
+    cwd: "${teleop_dir}"
+    command: "python3 -m robot.cam.main"
+
+# ── 논리 파츠 (웹 카드 / CLI --side 단위) ──────────────────────────────
+parts:
+  - name: arm-right
+    label: "오른팔"
+    kind: arm
+    side: right
+    components: [arm-right-receiver]
+    probe: { host: "${right_robot_ip}", port: 30004 }      # UR RTDE 포트 TCP 도달성
+    params: { file: "robot/arm/admittance/config/right.yaml", schema: arm }
+
+  - name: arm-left
+    label: "왼팔"
+    kind: arm
+    side: left
+    components: [arm-left-receiver]
+    probe: { host: "${left_robot_ip}", port: 30004 }
+    params: { file: "robot/arm/admittance/config/left.yaml", schema: arm }
+
+  - name: hand-right
+    label: "오른손"
+    kind: hand
+    side: right
+    components: [dg5f-right-driver, hand-right-receiver]
+    probe: { host: "${right_delto_ip}", port: 502 }        # Modbus TCP 도달성
+
+  - name: hand-left
+    label: "왼손"
+    kind: hand
+    side: left
+    components: [dg5f-left-driver, hand-left-receiver]
+    probe: { host: "${left_delto_ip}", port: 502 }
+
+  - name: cam
+    label: "카메라"
+    kind: cam
+    components: [cam-server]
+    params: { file: "robot/cam/config/default.yaml", schema: cam }
+
+# ── 비상정지 (웹 E-STOP 버튼) ──────────────────────────────────────────
+# 각 팔 수신부의 localhost UDP 포트로 estop 패킷을 burst 전송.
+# 포트는 트리거 시점에 각 팔 yaml 의 input.unified_port 를 읽어 사용 —
+# 읽기 실패 시 fallback 사용.
+estop:
+  burst_hz: 200
+  burst_duration_s: 0.5
+  fallback_arm_ports: { right: 9871, left: 9875 }
+
+# ── 초기 위치 이동 (웹 '초기 위치 이동' 버튼 → oneshot moveJ) ──────────
+# ⚠️ 해당 팔 수신부가 정지된 상태에서만 실행됨 (RTDE 제어 배타성).
+# ⚠️ 각 팔 yaml 의 initial_pose.enabled=false 면 이동 거부 —
+#    왼팔은 home 실측 후 left.yaml 에 기입해야 사용 가능.
+move_home:
+  right: { config: "robot/arm/admittance/config/right.yaml", robot_ip: "${right_robot_ip}", speed: 0.3, accel: 0.3 }
+  left:  { config: "robot/arm/admittance/config/left.yaml",  robot_ip: "${left_robot_ip}",  speed: 0.2, accel: 0.2 }
