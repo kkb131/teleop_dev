@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>팔 파라미터</title>
+  <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body data-page="arm">
+  <header>
+    <h1><a href="/">← 대시보드</a></h1>
+    <span id="arm-title" style="font-weight:700"></span>
+    <div class="spacer"></div>
+    <button id="estop" class="estop">E-STOP</button>
+  </header>
+  <div id="banner"></div>
+
+  <main>
+    <div id="left-warning" class="notice" style="display:none">
+      ⚠️ 이 팔은 <b>초기 자세 미실측</b> 상태입니다 (initial_pose.enabled=false).
+      첫 가동 전 <b>docs/xr_dual_arm_left_tuning_ko.md</b> 의 좌표계 튜닝·home 실측
+      절차를 완료하세요. 초기 위치 이동은 실측 완료 전까지 거부됩니다.
+    </div>
+
+    <div class="two-col">
+      <div class="panel">
+        <h2>라이브 상태</h2>
+        <div id="live" class="kv">로딩...</div>
+        <div class="btns" style="margin-top:10px; display:flex; gap:6px;">
+          <button id="p-start" class="primary">시작</button>
+          <button id="p-stop">정지</button>
+          <button id="p-restart" class="warn">재시작</button>
+          <button id="p-home">초기 위치 이동</button>
+        </div>
+        <div class="logpanel">
+          <div class="bar"><span>수신부 로그</span></div>
+          <pre id="log" style="height:200px"></pre>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>파라미터 <span id="param-file" style="font-size:11px;color:var(--muted)"></span></h2>
+        <div id="form">로딩...</div>
+        <div style="display:flex; gap:8px; margin-top:12px; align-items:center;">
+          <button id="save" class="primary">저장</button>
+          <span id="save-note" style="font-size:12px;color:var(--muted)"></span>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/assets/app.js"></script>
+</body>
+</html>

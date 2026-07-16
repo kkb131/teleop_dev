@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>카메라 스트리밍</title>
+  <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body data-page="cam">
+  <header>
+    <h1><a href="/">← 대시보드</a></h1>
+    <span style="font-weight:700">카메라 스트리밍</span>
+    <div class="spacer"></div>
+    <button id="estop" class="estop">E-STOP</button>
+  </header>
+  <div id="banner"></div>
+
+  <main>
+    <div class="two-col">
+      <div class="panel">
+        <h2>스트리밍 상태</h2>
+        <div id="live" class="kv">로딩...</div>
+        <table class="cams" id="cam-stats" style="margin-top:8px"></table>
+        <div class="btns" style="margin-top:10px; display:flex; gap:6px;">
+          <button id="p-start" class="primary">시작</button>
+          <button id="p-stop">정지</button>
+          <button id="p-restart" class="warn">재시작</button>
+        </div>
+        <p style="font-size:12px;color:var(--muted)">
+          영상 미리보기는 ZMQ 프로토콜이라 브라우저에서 볼 수 없습니다 —
+          조종 PC 에서 <code>python3 -m sender.cam.main</code> 실행 후
+          <code>http://localhost:8014/</code> 에서 확인하세요.
+        </p>
+        <div class="logpanel">
+          <div class="bar"><span>캠 서버 로그</span></div>
+          <pre id="log" style="height:180px"></pre>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>파라미터 <span id="param-file" style="font-size:11px;color:var(--muted)"></span></h2>
+        <div id="form">로딩...</div>
+        <div style="display:flex; gap:8px; margin-top:12px; align-items:center;">
+          <button id="save" class="primary">저장</button>
+          <span id="save-note" style="font-size:12px;color:var(--muted)"></span>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/assets/app.js"></script>
+</body>
+</html>
