@@ -1,9 +1,11 @@
 """ZMQ SUB 수신 스레드 — 카메라별 최신 프레임 슬롯.
 
 로봇 PC 의 robot/cam PUB(tcp 9873) 를 구독해 카메라별 LatestSlot 에
-최신 JPEG 만 유지한다. RCVHWM=1 + poll 후 NOBLOCK drain 으로 큐잉 지연을
-차단 (CONFLATE 은 multipart/다중 topic 과 비호환이라 미사용 —
-robot/cam/publisher.py 참조).
+최신 JPEG 만 유지한다. poll 후 NOBLOCK drain + LatestSlot 으로 topic 별
+최신만 반영하므로 큐잉 지연 없음. RCVHWM 은 **1로 두면 안 됨** — HWM 은
+topic 구분 없는 파이프 전체 한도라 다중 카메라에서 특정 topic 기아를
+유발할 수 있다 (robot/cam/publisher.py docstring 의 SNDHWM 설명 참조).
+CONFLATE 은 multipart/다중 topic 과 비호환이라 미사용.
 """
 
 import threading
@@ -61,7 +63,7 @@ class CamReceiver(threading.Thread):
     def run(self) -> None:
         ctx = zmq.Context.instance()
         sub = ctx.socket(zmq.SUB)
-        sub.setsockopt(zmq.RCVHWM, 1)
+        sub.setsockopt(zmq.RCVHWM, 8)   # 1이면 다중 topic 기아 — 모듈 docstring 참조
         sub.setsockopt(zmq.LINGER, 0)
         sub.connect(self._endpoint)
         for name in self._cameras:

@@ -5,7 +5,13 @@ CamZmqPublisher
     라 publish() 를 lock 으로 보호한다. ≤3캠 × 30fps × ~50KB 면 lock 경합은
     무시 가능 — teleimager 의 queue+publisher-thread 구조보다 홉 하나가 적다.
 
-    SNDHWM=1: 구독자별 파이프에 최신 1개만 유지 (느린 구독자에겐 drop).
+    SNDHWM=8: 구독자별 파이프 깊이. **1로 두면 안 됨** — HWM 은 topic 구분 없이
+    파이프 전체에 걸리는데, 워커 2개가 같은 lock 으로 back-to-back publish 하면
+    (위상이 겹치는 구간) 두 번째 topic 이 io 스레드가 첫 메시지를 빼내기 전에
+    도착해 매 사이클 drop → 한 카메라만 0fps 로 통째 기아. 실카메라는 클럭
+    drift 로 위상이 이동하며 수십 분씩 이 상태가 지속될 수 있다.
+    최신 프레임만 쓰는 목표는 수신측 LatestSlot (drain 후 topic 별 최신 유지)
+    이 담당하므로 HWM 은 topic 수 대비 여유만 있으면 된다.
     CONFLATE 은 multipart / 다중 topic 과 비호환이라 쓰지 않는다.
 
 CaptureWorker
@@ -29,7 +35,7 @@ class CamZmqPublisher:
     def __init__(self, bind_host: str = "0.0.0.0", port: int = 9873):
         self._ctx = zmq.Context.instance()
         self._sock = self._ctx.socket(zmq.PUB)
-        self._sock.setsockopt(zmq.SNDHWM, 1)
+        self._sock.setsockopt(zmq.SNDHWM, 8)   # 1이면 다중 topic 기아 — docstring 참조
         self._sock.setsockopt(zmq.LINGER, 0)
         self._sock.bind(f"tcp://{bind_host}:{port}")
         self._lock = threading.Lock()

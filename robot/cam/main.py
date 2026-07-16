@@ -152,7 +152,7 @@ def _selftest() -> int:
 
     ctx = zmq.Context.instance()
     sub = ctx.socket(zmq.SUB)
-    sub.setsockopt(zmq.RCVHWM, 1)
+    sub.setsockopt(zmq.RCVHWM, 8)   # 1이면 다중 topic 기아 — publisher.py docstring 참조
     sub.connect(f"tcp://127.0.0.1:{port}")
     for entry in cfg.cameras:
         sub.setsockopt_string(zmq.SUBSCRIBE, entry.name)

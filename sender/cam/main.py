@@ -110,7 +110,7 @@ def _selftest() -> int:
     # ── 인라인 PUB (테스트 프레임 30fps) ────────────────────────────────
     ctx = zmq.Context.instance()
     pub = ctx.socket(zmq.PUB)
-    pub.setsockopt(zmq.SNDHWM, 1)
+    pub.setsockopt(zmq.SNDHWM, 8)   # 1이면 다중 topic 기아 — robot/cam/publisher.py 참조
     pub.setsockopt(zmq.LINGER, 0)
     pub.bind(f"tcp://127.0.0.1:{zmq_port}")
     stop = threading.Event()
