@@ -1,0 +1,86 @@
+# 조종 PC 런처 구성 — XR 러너/adb/세션(자동 캘리)/cam 의 단일 소스.
+# 사용법: docs/launcher_guide_ko.md (조종 PC 부)
+#
+# ⚠️ 현장 배치 시 확인:
+#   - network.robot_pc_ip : 단일 모드 --target-ip / cam viewer 용.
+#     듀얼 모드는 scripts/config/xr_dual.yaml 의 network.robot_pc_ip 가 소스
+#     (불일치 시 대시보드에 경고 표시)
+#   - vars.teleop_dir : 이 PC 의 teleop_dev 경로
+
+version: 1
+
+network:
+  robot_pc_ip: "192.168.0.10"
+
+vars:
+  teleop_dir: "/workspaces/tamp_ws/src/teleop_dev"
+  xr_dual_cfg: "scripts/config/xr_dual.yaml"
+  single_scale: "0.5"
+
+web:                    # python3 -m launcher.sender.web 바인딩
+  host: "0.0.0.0"
+  port: 9877
+  token: ""
+  tls_cert: ""
+  tls_key: ""
+
+defaults:
+  stop_grace_s: 5.0
+
+# ── 프로세스 ────────────────────────────────────────────────────────────
+# 러너들은 use_pty 필수 — 웹 키패드/자동 캘리가 pty 로 키를 전달한다.
+components:
+  - name: xr-dual-runner
+    group: operator
+    cwd: "${teleop_dir}"
+    command: "python3 -m scripts.run_xr_dual_teleop --config ${xr_dual_cfg}"
+    use_pty: true
+
+  - name: xr-single-right-runner
+    group: operator
+    cwd: "${teleop_dir}"
+    command: "python3 -m scripts.run_xr_teleop --target-ip ${robot_pc_ip} --hand right --scale ${single_scale}"
+    use_pty: true
+
+  - name: xr-single-left-runner
+    group: operator
+    cwd: "${teleop_dir}"
+    command: "python3 -m scripts.run_xr_teleop --target-ip ${robot_pc_ip} --hand left --scale ${single_scale}"
+    use_pty: true
+
+  - name: cam-viewer
+    group: operator
+    cwd: "${teleop_dir}"
+    command: "python3 -m sender.cam.main --robot-ip ${robot_pc_ip}"
+
+# ── 러너 슬롯 (상호배타 — 동시에 하나만) ────────────────────────────────
+runners:
+  - { name: xr-dual,         label: "듀얼 (양팔+양손)",     component: xr-dual-runner,         kind: dual }
+  - { name: xr-single-right, label: "싱글 오른팔+오른손",   component: xr-single-right-runner, kind: single, side: right }
+  - { name: xr-single-left,  label: "싱글 왼팔+왼손",       component: xr-single-left-runner,  kind: single, side: left }
+
+# ── 파라미터 페이지 대상 ────────────────────────────────────────────────
+params:
+  xr-dual: { file: "${xr_dual_cfg}", schema: xr_dual }
+
+# ── adb (헤드셋 USB 연결) ───────────────────────────────────────────────
+adb:
+  binary: "adb"
+  reverse_ports: [8013, 8014, 9877]   # pose 브리지 / cam 뷰어 / 이 대시보드(헤드셋 브라우저 접속)
+  probe_interval_s: 3.0
+
+bridge:
+  port: 8013            # BridgePoseStore (러너 프로세스가 bind — 로컬 probe 용)
+
+cam:
+  component: cam-viewer
+  http_port: 8014
+
+# ── "조종 시작" 자동 캘리브레이션 시퀀스 ────────────────────────────────
+session:
+  default_mode: xr-dual
+  countdown_s: 4.0        # 러너 준비 후 캘리까지 대기 (자세 잡는 시간)
+  start_timeout_s: 15.0   # 러너 기동 대기
+  confirm_timeout_s: 6.0  # 'r' 후 calibrate 로그 확인 윈도우 (robot 핸드셰이크 5s 커버)
+  retry_delay_s: 2.0
+  max_retries: 10         # 혼자 운용 — 헤드셋 착용/손 들이밀 시간 여유
