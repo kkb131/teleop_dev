@@ -11,15 +11,12 @@
 from __future__ import annotations
 
 import re
-import socket
-import threading
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional
 
 from launcher.manager import LocalManager
+from launcher.probe import ANSI_RE, HwProber, strip_ansi  # noqa: F401 — 공용 이동, re-export 유지
 from launcher.robot.parts import PartSpec, RobotConfig
-
-ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 # admittance 수신부 상태블록 (robot/arm/admittance/main.py _write_status 포맷)
 _ARM_PATTERNS = {
@@ -36,10 +33,6 @@ _ARM_PATTERNS = {
 # robot.cam.main 의 stats 라인: "[robot.cam] head: 29.8fps 850KB/s fail=2  wrist: ..."
 _CAM_LINE_RE = re.compile(r"\[robot\.cam\]\s+(.+)")
 _CAM_STAT_RE = re.compile(r"(\S+): ([\d.]+)fps (\d+)KB/s(?: fail=(\d+))?")
-
-
-def strip_ansi(line: str) -> str:
-    return ANSI_RE.sub("", line).replace("\r", "").strip()
 
 
 def parse_arm_status(lines: List[str]) -> dict:
@@ -90,49 +83,6 @@ def parse_cam_stats(lines: List[str]) -> List[dict]:
          "fail": int(fail) if fail else 0}
         for name, fps, kbps, fail in _CAM_STAT_RE.findall(latest)
     ]
-
-
-class HwProber(threading.Thread):
-    """파츠별 probe (host, port) TCP 도달성 검사 — 3s 주기 백그라운드."""
-
-    def __init__(self, targets: Dict[str, Tuple[str, int]],
-                 interval_s: float = 3.0, timeout_s: float = 0.5):
-        super().__init__(daemon=True, name="hw-prober")
-        self._targets = targets                # part_name → (host, port)
-        self._interval = interval_s
-        self._timeout = timeout_s
-        self._lock = threading.Lock()
-        self._results: Dict[str, dict] = {}
-        self._stop = threading.Event()
-
-    def run(self) -> None:
-        while not self._stop.is_set():
-            for name, (host, port) in self._targets.items():
-                reachable = self._probe(host, port)
-                with self._lock:
-                    self._results[name] = {
-                        "host": host, "port": port,
-                        "reachable": reachable, "checked_at": time.time(),
-                    }
-            self._stop.wait(self._interval)
-
-    def _probe(self, host: str, port: int) -> bool:
-        try:
-            with socket.create_connection((host, port), timeout=self._timeout):
-                return True
-        except OSError:
-            return False
-
-    def stop(self) -> None:
-        self._stop.set()
-
-    def snapshot(self) -> Dict[str, dict]:
-        now = time.time()
-        with self._lock:
-            return {
-                name: {**r, "checked_s_ago": round(now - r["checked_at"], 1)}
-                for name, r in self._results.items()
-            }
 
 
 class StatusCollector:
