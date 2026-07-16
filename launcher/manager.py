@@ -1,11 +1,9 @@
 """LocalManager — 이 머신에서 도는 컴포넌트들의 관리자.
 
-agent (headless HTTP)  와 GUI 가 같은 인터페이스로 사용:
+bringup CLI 와 웹 대시보드가 같은 인터페이스로 사용:
     names() / spec(name) / start(name) / stop(name) / status(name)
     / log_since(name, seq) / send_input(name, text)
     / start_all() / stop_all()
-
-RemoteManager (agent_client.py) 가 같은 duck-type 인터페이스를 HTTP 로 제공.
 """
 
 from __future__ import annotations

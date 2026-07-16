@@ -1,19 +1,20 @@
 """런처 설정 로더 — 구성요소를 데이터(yaml)로 정의.
 
-스키마 (launcher/config/teleop_system.yaml 참조):
+스키마 (launcher/robot/config/robot.yaml 참조):
 
-    network:            # ${var} 치환 소스 + agent 접속 정보
-      robot_pc_ip: "192.168.0.10"
-      agent_port: 9876
+    network:            # ${var} 치환 소스 (IP/포트의 단일 소스)
+      right_robot_ip: "192.168.0.2"
       ...
     vars:               # 추가 치환 변수 (network 와 병합)
       teleop_dir: "/workspaces/tamp_ws/src/teleop_dev"
     setups:             # 이름 붙은 shell 스니펫 — 컴포넌트가 setup: [이름] 으로 참조
       ros: "source /opt/ros/humble/setup.bash && ..."
-    agent:              # robot PC agent 데몬 바인딩
+    web:                # 웹 대시보드 (launcher.robot.web) 바인딩
       host: "0.0.0.0"
       port: 9876
       token: ""         # 비우면 인증 없음 (신뢰 네트워크 전용)
+      tls_cert: ""      # tls_cert+tls_key 지정 시 HTTPS
+      tls_key: ""
     defaults:
       stop_grace_s: 5.0
       start_delay_s: 0.0
@@ -29,6 +30,9 @@
         use_pty: false          # termios 필요한 프로세스 (키 입력 전달 가능)
         oneshot: false          # true 면 정상 종료(rc=0)가 완료 상태
         env: {}
+
+parts/estop/move_home 등 robot 런처 전용 섹션은 launcher.robot.parts 가
+같은 yaml 에서 추가로 파싱한다 (이 로더는 그대로 통과).
 """
 
 from __future__ import annotations
@@ -77,17 +81,20 @@ class ComponentSpec:
 
 
 @dataclass
-class AgentConfig:
+class WebConfig:
+    """웹 대시보드 (launcher.robot.web) 바인딩/보안 설정 — yaml `web:` 섹션."""
     host: str = "0.0.0.0"
     port: int = 9876
-    token: str = ""
+    token: str = ""          # 비우면 인증 없음 (신뢰 LAN 전용)
+    tls_cert: str = ""       # tls_cert + tls_key 둘 다 지정 시 HTTPS
+    tls_key: str = ""
 
 
 @dataclass
 class LauncherConfig:
     network: Dict[str, str] = field(default_factory=dict)
     setups: Dict[str, str] = field(default_factory=dict)
-    agent: AgentConfig = field(default_factory=AgentConfig)
+    web: WebConfig = field(default_factory=WebConfig)
     components: List[ComponentSpec] = field(default_factory=list)
 
     def by_group(self, group: str) -> List[ComponentSpec]:
@@ -129,11 +136,13 @@ class LauncherConfig:
 
         setups = {str(k): sub(str(v)) for k, v in (raw.get("setups") or {}).items()}
 
-        agent_raw = raw.get("agent") or {}
-        agent = AgentConfig(
-            host=str(agent_raw.get("host", "0.0.0.0")),
-            port=int(sub(str(agent_raw.get("port", variables.get("agent_port", 9876))))),
-            token=str(agent_raw.get("token", "")),
+        web_raw = raw.get("web") or {}
+        web = WebConfig(
+            host=str(web_raw.get("host", "0.0.0.0")),
+            port=int(sub(str(web_raw.get("port", variables.get("web_port", 9876))))),
+            token=str(web_raw.get("token", "")),
+            tls_cert=sub(str(web_raw.get("tls_cert", ""))),
+            tls_key=sub(str(web_raw.get("tls_key", ""))),
         )
 
         defaults = raw.get("defaults") or {}
@@ -165,7 +174,7 @@ class LauncherConfig:
             ))
 
         cfg = cls(network={k: str(v) for k, v in (raw.get("network") or {}).items()},
-                  setups=setups, agent=agent, components=components)
+                  setups=setups, web=web, components=components)
 
         # depends_on 대상 존재 + cycle 검증 (로드 시점에 실패)
         names = {c.name for c in cfg.components}
